@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>量化选股 - 简洁版</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            font-family: 'Microsoft YaHei', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            width: 100%;
+        }
+        
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 30px;
+            position: relative;
+        }
+        
+        .header h1 {
+            font-size: 32px;
+            margin-bottom: 10px;
+            font-weight: 300;
+            letter-spacing: 2px;
+        }
+        
+        .header p {
+            font-size: 14px;
+            opacity: 0.9;
+        }
+
+        .top-actions {
+            position: absolute;
+            right: 0;
+            top: -4px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .auth-pill {
+            font-size: 12px;
+            padding: 8px 12px;
+            border-radius: 999px;
+            background: rgba(255,255,255,0.18);
+            border: 1px solid rgba(255,255,255,0.18);
+            backdrop-filter: blur(6px);
+        }
+
+        .top-link {
+            color: white;
+            text-decoration: none;
+            font-size: 13px;
+            padding: 8px 12px;
+            border-radius: 999px;
+            background: rgba(0,0,0,0.16);
+        }
+
+        .top-link:hover {
+            background: rgba(0,0,0,0.28);
+        }
+        
+        /* 标签页样式 */
+        .tabs-container {
+            background: white;
+            border-radius: 12px;
+            padding: 8px;
+            display: inline-flex;
+            gap: 8px;
+            margin-bottom: 30px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+        }
+        
+        .tab-button {
+            padding: 12px 40px;
+            font-size: 16px;
+            background: transparent;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s;
+            color: #666;
+            font-weight: 500;
+        }
+        
+        .tab-button:hover {
+            background: #f5f5f5;
+            color: #333;
+        }
+        
+        .tab-button.active {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+        }
+        
+        /* 扫描按钮 */
+        .scan-button {
+            text-align: center;
+        }
+        
+        .btn-scan {
+            padding: 18px 60px;
+            font-size: 18px;
+            background: white;
+            color: #667eea;
+            border: none;
+            border-radius: 30px;
+            cursor: pointer;
+            font-weight: bold;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+            transition: all 0.3s;
+        }
+        
+        .btn-scan:hover {
+            transform: scale(1.05);
+            box-shadow: 0 6px 30px rgba(0,0,0,0.3);
+        }
+        
+        .btn-scan:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        .btn-scan .loading {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid #f3f3f3;
+            border-top: 2px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-left: 10px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        /* 结果区域 */
+        .results {
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            margin-top: 30px;
+            display: none;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+        }
+        
+        .results-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 25px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid #f0f0f0;
+        }
+        
+        .results-title {
+            font-size: 24px;
+            font-weight: bold;
+            color: #333;
+        }
+        
+        .results-count {
+            font-size: 16px;
+            color: #667eea;
+            background: rgba(102, 126, 234, 0.1);
+            padding: 8px 20px;
+            border-radius: 20px;
+        }
+        
+        .update-time {
+            text-align: center;
+            color: #999;
+            font-size: 13px;
+            margin-bottom: 20px;
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 6px;
+        }
+        
+        .stock-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 20px;
+        }
+        
+        .stock-card {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 20px;
+            transition: all 0.3s;
+            border-left: 4px solid #667eea;
+        }
+        
+        .stock-card:hover {
+            background: #f0f0f0;
+            transform: translateX(5px);
+        }
+        
+        .stock-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+        
+        .stock-code {
+            font-size: 20px;
+            font-weight: bold;
+            color: #333;
+        }
+        
+        .stock-name {
+            font-size: 14px;
+            color: #666;
+        }
+        
+        .stock-price {
+            font-size: 24px;
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 8px;
+        }
+        
+        .stock-change {
+            font-size: 16px;
+            font-weight: bold;
+        }
+        
+        .stock-change.up {
+            color: #e74c3c;
+        }
+        
+        .stock-change.down {
+            color: #27ae60;
+        }
+        
+        .stock-strategy {
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 1px solid #e0e0e0;
+            font-size: 13px;
+            color: #9b59b6;
+        }
+        
+        .stock-reason {
+            margin-top: 8px;
+            font-size: 12px;
+            color: #666;
+            line-height: 1.5;
+        }
+        
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #999;
+        }
+        
+        .empty-state-icon {
+            font-size: 64px;
+            margin-bottom: 20px;
+        }
+        
+        .empty-state-text {
+            font-size: 18px;
+        }
+
+        @media (max-width: 768px) {
+            .top-actions {
+                position: static;
+                justify-content: center;
+                flex-wrap: wrap;
+                margin-top: 14px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📈 今日选股推荐</h1>
+            <p>每日开盘前更新</p>
+            <div class="top-actions">
+                <span class="auth-pill">已登录：{{ current_user }}</span>
+                <a class="top-link" href="/workspace">工作台</a>
+                <a class="top-link" href="/logout">退出</a>
+            </div>
+        </div>
+        
+        <div style="text-align: center; margin-bottom: 30px;">
+            <div class="tabs-container">
+                <button class="tab-button active" data-style="short" onclick="selectTab(this)">
+                    短线
+                </button>
+                <button class="tab-button" data-style="long" onclick="selectTab(this)">
+                    中长线
+                </button>
+            </div>
+        </div>
+        
+        <div class="results" id="results">
+            <div class="results-header">
+                <div class="results-title" id="resultsTitle">今日推荐</div>
+                <div class="results-count" id="resultsCount">0 只股票</div>
+            </div>
+            <div class="update-time" id="updateTime"></div>
+            <div class="stock-grid" id="stockGrid"></div>
+        </div>
+    </div>
+    
+    <script>
+        let selectedStyle = 'short'; // 默认选中短线
+        let allData = null;
+
+        async function getApiData(url, options) {
+            const response = await fetch(url, options);
+            const responseText = await response.text();
+            const trimmedText = responseText.trim();
+            let result = null;
+
+            if (trimmedText) {
+                try {
+                    result = JSON.parse(trimmedText);
+                } catch (error) {
+                    result = null;
+                }
+            }
+
+            if (response.status === 401 || result?.login_required) {
+                window.location.href = result?.login_url || `/login?next=${encodeURIComponent(window.location.pathname + window.location.search)}`;
+                throw new Error('login-required');
+            }
+
+            if (!result) {
+                if (response.status === 504) {
+                    throw new Error('扫描超时，服务器网关未及时返回结果，请稍后重试');
+                }
+                if (trimmedText.startsWith('<')) {
+                    throw new Error(`服务器返回了 HTML 错误页 (${response.status || 'unknown'})`);
+                }
+                throw new Error(response.ok ? '服务器返回了无法解析的响应' : `请求失败 (${response.status})`);
+            }
+
+            if (!response.ok || !result.success) {
+                throw new Error(result.error || `请求失败 (${response.status})`);
+            }
+
+            return result;
+        }
+        
+        // 页面加载时自动加载数据
+        window.addEventListener('DOMContentLoaded', function() {
+            loadDailyData();
+        });
+        
+        function selectTab(button) {
+            // 移除其他选中状态
+            document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
+            
+            // 选中当前标签
+            button.classList.add('active');
+            selectedStyle = button.dataset.style;
+            
+            // 显示对应数据
+            if (allData) {
+                displayResults(allData[selectedStyle] || [], getStyleName(selectedStyle));
+            }
+        }
+        
+        function getStyleName(style) {
+            const names = {
+                'short': '短线',
+                'long': '中长线'
+            };
+            return names[style] || '未知';
+        }
+        
+        async function loadDailyData() {
+            try {
+                const result = await getApiData('/api/daily_recommendations');
+                allData = result.data;
+                
+                // 显示更新时间
+                const updateTime = document.getElementById('updateTime');
+                updateTime.textContent = `数据更新时间：${result.update_time}`;
+                
+                // 显示当前选中风格的数据
+                displayResults(allData[selectedStyle] || [], getStyleName(selectedStyle));
+            } catch (error) {
+                if (error.message === 'login-required') {
+                    return;
+                }
+                showError('请求失败: ' + error.message);
+            }
+        }
+        
+        function displayResults(stocks, styleName) {
+            const results = document.getElementById('results');
+            const title = document.getElementById('resultsTitle');
+            const count = document.getElementById('resultsCount');
+            const grid = document.getElementById('stockGrid');
+            
+            results.style.display = 'block';
+            title.textContent = `${styleName}推荐`;
+            count.textContent = `${stocks.length} 只股票`;
+            
+            if (stocks.length === 0) {
+                grid.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-state-icon">📭</div>
+                        <div class="empty-state-text">今日暂无推荐股票</div>
+                    </div>
+                `;
+                return;
+            }
+            
+            grid.innerHTML = stocks.map(stock => {
+                const change = stock.change || 0;
+                const changeClass = change >= 0 ? 'up' : 'down';
+                const changeSymbol = change >= 0 ? '+' : '';
+                
+                return `
+                    <div class="stock-card">
+                        <div class="stock-header">
+                            <div>
+                                <div class="stock-code">${stock.code}</div>
+                                <div class="stock-name">${stock.name}</div>
+                            </div>
+                        </div>
+                        <div class="stock-price">¥${stock.price.toFixed(2)}</div>
+                        <div class="stock-change ${changeClass}">
+                            ${changeSymbol}${change.toFixed(2)}%
+                        </div>
+                        ${stock.strategy ? `<div class="stock-strategy">✓ ${stock.strategy}</div>` : ''}
+                        ${stock.reason ? `<div class="stock-reason">${stock.reason}</div>` : ''}
+                    </div>
+                `;
+            }).join('');
+        }
+        
+        function showError(message) {
+            const grid = document.getElementById('stockGrid');
+            const results = document.getElementById('results');
+            results.style.display = 'block';
+            
+            grid.innerHTML = `
+                <div class="empty-state">
+                    <div class="empty-state-icon">⚠️</div>
+                    <div class="empty-state-text">${message}</div>
+                </div>
+            `;
+        }
+    </script>
+</body>
+</html>

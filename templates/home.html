@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>量化选股工作台</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            font-family: 'Microsoft YaHei', sans-serif;
+            height: 100vh;
+            overflow: hidden;
+        }
+        
+        .container {
+            display: flex;
+            height: 100vh;
+        }
+        
+        /* 左侧白色区域 */
+        .side-white {
+            flex: 1;
+            background: #f5f5f5;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+        
+        /* 右侧黑色区域 */
+        .side-black {
+            flex: 1;
+            background: #1a1a1a;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+        
+        /* 门的样式 */
+        .door-wrapper {
+            perspective: 1000px;
+        }
+        
+        .door {
+            width: 180px;
+            height: 340px;
+            border-radius: 90px 90px 0 0;
+            position: relative;
+            cursor: pointer;
+            transition: transform 0.3s ease;
+            transform-style: preserve-3d;
+            transform-origin: left center;
+        }
+        
+        .door:hover {
+            transform: scale(1.02);
+        }
+        
+        .door:hover .door-handle {
+            transform: rotate(-20deg);
+        }
+        
+        /* 门打开动画 */
+        .door.opening {
+            animation: doorOpen 0.8s ease-in-out forwards;
+        }
+        
+        @keyframes doorOpen {
+            0% {
+                transform: scale(1) rotateY(0deg);
+            }
+            30% {
+                transform: scale(1.5) rotateY(0deg);
+            }
+            100% {
+                transform: scale(3) rotateY(-90deg);
+                opacity: 0;
+            }
+        }
+        
+        /* 页面淡出 */
+        .container.fade-out {
+            animation: fadeOut 0.5s ease-in-out 0.5s forwards;
+        }
+        
+        @keyframes fadeOut {
+            to {
+                opacity: 0;
+            }
+        }
+        
+        /* 黑门（在白色背景上） */
+        .door-black {
+            background: linear-gradient(180deg, #2a2a2a 0%, #1a1a1a 100%);
+            box-shadow: 
+                inset 0 0 30px rgba(0,0,0,0.3),
+                0 10px 40px rgba(0,0,0,0.3);
+        }
+        
+        /* 白门（在黑色背景上） */
+        .door-white {
+            background: linear-gradient(180deg, #ffffff 0%, #e8e8e8 100%);
+            box-shadow: 
+                inset 0 0 30px rgba(255,255,255,0.3),
+                0 10px 40px rgba(0,0,0,0.5);
+        }
+        
+        /* 门框装饰 */
+        .door::before {
+            content: '';
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            right: 20px;
+            bottom: 20px;
+            border-radius: 70px 70px 0 0;
+            border: 2px solid;
+        }
+        
+        .door-black::before {
+            border-color: #3a3a3a;
+        }
+        
+        .door-white::before {
+            border-color: #d0d0d0;
+        }
+        
+        /* 门把手 */
+        .door-handle {
+            position: absolute;
+            right: 30px;
+            top: 55%;
+            width: 12px;
+            height: 40px;
+            border-radius: 6px;
+            transition: transform 0.3s ease;
+            transform-origin: top center;
+        }
+        
+        .door-black .door-handle {
+            background: linear-gradient(90deg, #c0a060, #d4b878, #c0a060);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+        }
+        
+        .door-white .door-handle {
+            background: linear-gradient(90deg, #404040, #606060, #404040);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+        }
+        
+        /* 门把手底座 */
+        .door-handle::before {
+            content: '';
+            position: absolute;
+            top: -5px;
+            left: -4px;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+        }
+        
+        .door-black .door-handle::before {
+            background: linear-gradient(135deg, #d4b878, #a08040);
+        }
+        
+        .door-white .door-handle::before {
+            background: linear-gradient(135deg, #505050, #303030);
+        }
+        
+        /* 门把手下压动画 */
+        .door.opening .door-handle {
+            animation: handleDown 0.3s ease-out forwards;
+        }
+        
+        @keyframes handleDown {
+            to {
+                transform: rotate(-45deg);
+            }
+        }
+        
+        /* 标题 */
+        .title {
+            position: absolute;
+            top: 60px;
+            font-size: 18px;
+            letter-spacing: 3px;
+        }
+        
+        .side-white .title {
+            color: #333;
+        }
+        
+        .side-black .title {
+            color: #ccc;
+        }
+        
+        /* 描述文字 */
+        .desc {
+            position: absolute;
+            bottom: 80px;
+            font-size: 13px;
+            text-align: center;
+            line-height: 1.8;
+        }
+        
+        .side-white .desc {
+            color: #666;
+        }
+        
+        .side-black .desc {
+            color: #888;
+        }
+        
+        /* 中间分隔线 */
+        .divider {
+            position: absolute;
+            left: 50%;
+            top: 0;
+            bottom: 0;
+            width: 2px;
+            background: linear-gradient(180deg, 
+                transparent 0%, 
+                #888 20%, 
+                #888 80%, 
+                transparent 100%);
+            z-index: 10;
+        }
+        
+        /* 中间logo */
+        .center-logo {
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 20;
+            width: 64px;
+            height: 64px;
+            background: #e74c3c;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+            overflow: hidden;
+        }
+        
+        .center-logo svg {
+            width: 36px;
+            height: 36px;
+        }
+        
+        /* 点击提示 */
+        .click-hint {
+            position: absolute;
+            bottom: 30px;
+            font-size: 11px;
+            opacity: 0.5;
+        }
+        
+        .side-white .click-hint { color: #333; }
+        .side-black .click-hint { color: #ccc; }
+
+        .top-actions {
+            position: fixed;
+            top: 24px;
+            right: 24px;
+            z-index: 30;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .user-pill {
+            padding: 10px 14px;
+            border-radius: 999px;
+            background: rgba(255,255,255,0.9);
+            color: #222;
+            font-size: 12px;
+            letter-spacing: 1px;
+            box-shadow: 0 6px 18px rgba(0,0,0,0.12);
+        }
+
+        .logout-link {
+            padding: 10px 16px;
+            border-radius: 999px;
+            background: rgba(26,26,26,0.88);
+            color: #fff;
+            text-decoration: none;
+            font-size: 12px;
+            letter-spacing: 1px;
+            box-shadow: 0 6px 18px rgba(0,0,0,0.18);
+        }
+
+        .logout-link:hover {
+            background: #000;
+        }
+
+        @media (max-width: 768px) {
+            .top-actions {
+                top: 16px;
+                right: 16px;
+                left: 16px;
+                justify-content: flex-end;
+                flex-wrap: wrap;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="top-actions">
+        <span class="user-pill">已登录：{{ current_user }}</span>
+        <a class="logout-link" href="/logout">退出登录</a>
+    </div>
+
+    <div class="container" id="container">
+        <!-- 左侧：白色背景 + 黑门 -->
+        <div class="side-white">
+            <div class="title">全市场扫描</div>
+            <div class="door-wrapper">
+                <div class="door door-black" onclick="openDoor(this, '/market')">
+                    <div class="door-handle"></div>
+                </div>
+            </div>
+            <div class="desc">
+                扫描全市场个股<br>
+                按策略筛选买点
+            </div>
+            <div class="click-hint">点击门把手进入</div>
+        </div>
+        
+        <!-- 中间分隔 -->
+        <div class="divider"></div>
+        <div class="center-logo">
+            <svg viewBox="0 0 24 24">
+                <defs>
+                    <clipPath id="top-half">
+                        <rect x="0" y="0" width="24" height="12"/>
+                    </clipPath>
+                    <clipPath id="bottom-half">
+                        <rect x="0" y="12" width="24" height="12"/>
+                    </clipPath>
+                </defs>
+                <text x="12" y="19" text-anchor="middle" font-size="22" font-weight="bold" font-family="Arial" clip-path="url(#top-half)" fill="#1a1a1a">S</text>
+                <text x="12" y="19" text-anchor="middle" font-size="22" font-weight="bold" font-family="Arial" clip-path="url(#bottom-half)" fill="#ffffff">S</text>
+            </svg>
+        </div>
+        
+        <!-- 右侧：黑色背景 + 白门 -->
+        <div class="side-black">
+            <div class="title">强势板块扫描</div>
+            <div class="door-wrapper">
+                <div class="door door-white" onclick="openDoor(this, '/sector')">
+                    <div class="door-handle"></div>
+                </div>
+            </div>
+            <div class="desc">
+                扫描潜力板块<br>
+                精选板块龙头
+            </div>
+            <div class="click-hint">点击门把手进入</div>
+        </div>
+    </div>
+
+<script>
+function openDoor(door, url) {
+    // 添加开门动画
+    door.classList.add('opening');
+    
+    // 页面淡出
+    setTimeout(() => {
+        document.getElementById('container').classList.add('fade-out');
+    }, 300);
+    
+    // 跳转
+    setTimeout(() => {
+        window.location.href = url;
+    }, 900);
+}
+
+// 页面加载时重置状态（处理浏览器回退）
+window.addEventListener('pageshow', function(event) {
+    // 移除所有动画类
+    document.getElementById('container').classList.remove('fade-out');
+    document.querySelectorAll('.door').forEach(door => {
+        door.classList.remove('opening');
+    });
+});
+</script>
+</body>
+</html>

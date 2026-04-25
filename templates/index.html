@@ -1,0 +1,1003 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>量化选股 - 股票分析平台</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        
+        header {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        h1 {
+            color: #333;
+            font-size: 24px;
+        }
+        
+        .btn {
+            padding: 10px 20px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background 0.3s;
+        }
+        
+        .btn:hover {
+            background: #5568d3;
+        }
+        
+        .btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        
+        .loading {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid #f3f3f3;
+            border-top: 2px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-left: 10px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .stock-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .stock-card {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        
+        .stock-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+        
+        .stock-card.active {
+            background: #667eea;
+            color: white;
+        }
+        
+        .stock-code {
+            font-size: 18px;
+            font-weight: bold;
+            margin-bottom: 8px;
+        }
+        
+        .stock-price {
+            font-size: 16px;
+            margin-bottom: 5px;
+        }
+        
+        .stock-change {
+            font-size: 14px;
+        }
+        
+        .stock-change.up {
+            color: #f56767;
+        }
+        
+        .stock-change.down {
+            color: #2ecc71;
+        }
+        
+        .charts-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        
+        .chart-box {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        
+        .chart-title {
+            font-size: 16px;
+            font-weight: bold;
+            margin-bottom: 15px;
+            color: #333;
+        }
+        
+        .chart-wrapper {
+            position: relative;
+            height: 400px;
+        }
+        
+        .info-box {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+        }
+        
+        .info-item {
+            padding: 10px;
+            background: #f5f5f5;
+            border-radius: 4px;
+        }
+        
+        .info-label {
+            font-size: 12px;
+            color: #999;
+            margin-bottom: 5px;
+        }
+        
+        .info-value {
+            font-size: 16px;
+            font-weight: bold;
+            color: #333;
+        }
+
+        .info-value-wrap {
+            font-size: 14px;
+            line-height: 1.5;
+            white-space: normal;
+            word-break: break-word;
+        }
+        
+        .empty-state {
+            text-align: center;
+            padding: 40px;
+            background: white;
+            border-radius: 8px;
+            color: #999;
+        }
+        
+        /* 策略相关样式 */
+        .strategy-section {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        
+        .strategy-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        
+        .strategy-title {
+            font-size: 18px;
+            font-weight: bold;
+            color: #333;
+        }
+        
+        .strategy-count {
+            background: #667eea;
+            color: white;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 14px;
+        }
+        
+        .strategy-category {
+            margin-bottom: 20px;
+        }
+        
+        .category-title {
+            font-size: 14px;
+            color: #667eea;
+            font-weight: bold;
+            margin-bottom: 10px;
+            padding-bottom: 5px;
+            border-bottom: 2px solid #667eea;
+        }
+        
+        .strategy-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 12px;
+        }
+        
+        .strategy-card {
+            background: #f8f9fa;
+            padding: 12px 15px;
+            border-radius: 6px;
+            border-left: 4px solid #ddd;
+            transition: all 0.3s;
+        }
+        
+        .strategy-card:hover {
+            background: #f0f0f0;
+        }
+        
+        .strategy-card.突破 { border-left-color: #e74c3c; }
+        .strategy-card.趋势 { border-left-color: #3498db; }
+        .strategy-card.抄底 { border-left-color: #2ecc71; }
+        .strategy-card.回调 { border-left-color: #f39c12; }
+        .strategy-card.洗盘 { border-left-color: #9b59b6; }
+        .strategy-card.组合 { border-left-color: #1abc9c; }
+        
+        .strategy-name {
+            font-size: 15px;
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 5px;
+        }
+        
+        .strategy-desc {
+            font-size: 13px;
+            color: #666;
+            line-height: 1.4;
+        }
+        
+        .strategy-type {
+            display: inline-block;
+            font-size: 11px;
+            padding: 2px 8px;
+            border-radius: 10px;
+            margin-top: 8px;
+        }
+        
+        .strategy-type.突破 { background: #fde8e8; color: #e74c3c; }
+        .strategy-type.趋势 { background: #e8f4fd; color: #3498db; }
+        .strategy-type.抄底 { background: #e8fdf0; color: #2ecc71; }
+        .strategy-type.回调 { background: #fdf5e8; color: #f39c12; }
+        .strategy-type.洗盘 { background: #f3e8fd; color: #9b59b6; }
+        .strategy-type.组合 { background: #e8fdfb; color: #1abc9c; }
+        
+        /* 股票策略检测结果 */
+        .stock-strategy-box {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-top: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        
+        .strategy-result {
+            padding: 10px 15px;
+            margin-bottom: 10px;
+            border-radius: 6px;
+            background: #f8f9fa;
+        }
+        
+        .strategy-result.triggered {
+            background: #d4edda;
+            border-left: 4px solid #28a745;
+        }
+        
+        .strategy-result.not-triggered {
+            background: #f8f9fa;
+            border-left: 4px solid #ddd;
+        }
+        
+        .strategy-result-name {
+            font-weight: bold;
+            color: #333;
+        }
+        
+        .strategy-result-status {
+            font-size: 12px;
+            margin-left: 10px;
+        }
+        
+        .strategy-result-status.yes {
+            color: #28a745;
+        }
+        
+        .strategy-result-status.no {
+            color: #999;
+        }
+        
+        .strategy-result-detail {
+            font-size: 13px;
+            color: #666;
+            margin-top: 5px;
+        }
+        
+        .tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+        
+        .tab-btn {
+            padding: 8px 16px;
+            background: #f0f0f0;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.3s;
+        }
+        
+        .tab-btn:hover {
+            background: #e0e0e0;
+        }
+        
+        .tab-btn.active {
+            background: #667eea;
+            color: white;
+        }
+        
+        .strategy-select {
+            padding: 10px 15px;
+            border: 2px solid #667eea;
+            border-radius: 4px;
+            font-size: 14px;
+            background: white;
+            cursor: pointer;
+            min-width: 150px;
+        }
+        
+        .strategy-select:focus {
+            outline: none;
+            border-color: #5568d3;
+        }
+        
+        .scan-info {
+            background: #e8f4fd;
+            padding: 10px 15px;
+            border-radius: 6px;
+            margin-bottom: 15px;
+            color: #3498db;
+            font-size: 14px;
+        }
+        
+        @media (max-width: 768px) {
+            .charts-container {
+                grid-template-columns: 1fr;
+            }
+            
+            .stock-list {
+                grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>📈 量化选股分析平台</h1>
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <button class="btn" id="strategyBtn" onclick="showStrategies()" style="background: #9b59b6;">
+                    查看策略
+                </button>
+                <select id="strategySelect" class="strategy-select">
+                    <option value="">全部扫描</option>
+                    <optgroup label="基础策略">
+                        <option value="放量突破">放量突破</option>
+                        <option value="均线金叉">均线金叉</option>
+                        <option value="MACD底背离">MACD底背离</option>
+                        <option value="缩量回踩">缩量回踩</option>
+                        <option value="突破平台">突破平台</option>
+                        <option value="底部放量">底部放量</option>
+                        <option value="三连阳">三连阳</option>
+                        <option value="涨停破位洗盘">涨停破位洗盘</option>
+                    </optgroup>
+                    <optgroup label="新洗盘策略">
+                        <option value="缩量横盘整理">缩量横盘整理</option>
+                        <option value="深度回调支撑">深度回调支撑</option>
+                        <option value="箱体突破">箱体突破</option>
+                        <option value="均线粘合发散">均线粘合发散</option>
+                        <option value="地量见底">地量见底</option>
+                    </optgroup>
+                    <optgroup label="组合策略">
+                        <option value="潜力板块+涨停洗盘">潜力板块+涨停洗盘</option>
+                    </optgroup>
+                </select>
+                <button class="btn" id="scanBtn" onclick="scanStocks()">
+                    开始扫描
+                </button>
+            </div>
+        </header>
+        
+        <!-- 策略展示区域 -->
+        <div id="strategySection" class="strategy-section" style="display: none;">
+            <div class="strategy-header">
+                <div class="strategy-title">📊 策略库</div>
+                <div class="strategy-count" id="strategyCount">0 个策略</div>
+            </div>
+            <div id="strategyList"></div>
+        </div>
+        
+        <div id="stockList" class="stock-list"></div>
+        
+        <div id="chartsContainer" class="charts-container" style="display: none;">
+            <div class="chart-box">
+                <div class="chart-title">分时图（5日）</div>
+                <div class="chart-wrapper">
+                    <canvas id="intradayChart"></canvas>
+                </div>
+            </div>
+            
+            <div class="chart-box">
+                <div class="chart-title">日K线（30日）</div>
+                <div class="chart-wrapper">
+                    <canvas id="klineChart"></canvas>
+                </div>
+            </div>
+        </div>
+        
+        <div id="infoBox" class="info-box" style="display: none;">
+            <div class="chart-title">股票信息</div>
+            <div class="info-grid" id="infoGrid"></div>
+        </div>
+        
+        <!-- 股票策略检测结果 -->
+        <div id="stockStrategyBox" class="stock-strategy-box" style="display: none;">
+            <div class="strategy-header">
+                <div class="strategy-title">🎯 策略检测结果</div>
+                <div class="strategy-count" id="triggeredCount">0 个触发</div>
+            </div>
+            <div class="tabs">
+                <button class="tab-btn active" onclick="filterStrategies('all')">全部</button>
+                <button class="tab-btn" onclick="filterStrategies('triggered')">已触发</button>
+                <button class="tab-btn" onclick="filterStrategies('not-triggered')">未触发</button>
+            </div>
+            <div id="stockStrategyList"></div>
+        </div>
+    </div>
+    
+    <script>
+        // 简易图表库
+        class SimpleChart {
+            constructor(ctx, config) {
+                this.ctx = ctx;
+                this.canvas = ctx.canvas;
+                this.config = config;
+                this.draw();
+            }
+            
+            destroy() {
+                this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+            }
+            
+            draw() {
+                const ctx = this.ctx;
+                const canvas = this.canvas;
+                const data = this.config.data;
+                const labels = data.labels;
+                const dataset = data.datasets[0];
+                const values = dataset.data;
+                
+                // 设置画布大小
+                canvas.width = canvas.parentElement.clientWidth;
+                canvas.height = canvas.parentElement.clientHeight;
+                
+                const width = canvas.width;
+                const height = canvas.height;
+                const padding = 50;
+                
+                // 清空画布
+                ctx.clearRect(0, 0, width, height);
+                
+                if (!values || values.length === 0) return;
+                
+                // 计算数据范围
+                const minVal = Math.min(...values.filter(v => v > 0));
+                const maxVal = Math.max(...values);
+                const range = maxVal - minVal || 1;
+                
+                // 绘制背景网格
+                ctx.strokeStyle = '#eee';
+                ctx.lineWidth = 1;
+                for (let i = 0; i <= 5; i++) {
+                    const y = padding + (height - 2 * padding) * i / 5;
+                    ctx.beginPath();
+                    ctx.moveTo(padding, y);
+                    ctx.lineTo(width - padding, y);
+                    ctx.stroke();
+                    
+                    // Y轴标签
+                    const val = maxVal - range * i / 5;
+                    ctx.fillStyle = '#999';
+                    ctx.font = '12px Arial';
+                    ctx.textAlign = 'right';
+                    ctx.fillText(val.toFixed(2), padding - 5, y + 4);
+                }
+                
+                // 绘制折线
+                ctx.strokeStyle = dataset.borderColor || '#667eea';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                
+                const stepX = (width - 2 * padding) / (values.length - 1 || 1);
+                
+                values.forEach((val, i) => {
+                    const x = padding + i * stepX;
+                    const y = padding + (height - 2 * padding) * (1 - (val - minVal) / range);
+                    
+                    if (i === 0) {
+                        ctx.moveTo(x, y);
+                    } else {
+                        ctx.lineTo(x, y);
+                    }
+                });
+                ctx.stroke();
+                
+                // 填充区域
+                if (dataset.fill) {
+                    ctx.lineTo(padding + (values.length - 1) * stepX, height - padding);
+                    ctx.lineTo(padding, height - padding);
+                    ctx.closePath();
+                    ctx.fillStyle = dataset.backgroundColor || 'rgba(102, 126, 234, 0.1)';
+                    ctx.fill();
+                }
+                
+                // X轴标签（只显示部分）
+                ctx.fillStyle = '#999';
+                ctx.font = '11px Arial';
+                ctx.textAlign = 'center';
+                const labelStep = Math.ceil(labels.length / 6);
+                labels.forEach((label, i) => {
+                    if (i % labelStep === 0 || i === labels.length - 1) {
+                        const x = padding + i * stepX;
+                        ctx.fillText(label.slice(-8), x, height - padding + 20);
+                    }
+                });
+            }
+        }
+        
+        // 兼容 Chart.js API
+        window.Chart = SimpleChart;
+    </script>
+    <script>
+        let intradayChart = null;
+        let klineChart = null;
+        let currentStock = null;
+        
+        async function scanStocks() {
+            const btn = document.getElementById('scanBtn');
+            const strategy = document.getElementById('strategySelect').value;
+            
+            btn.disabled = true;
+            btn.innerHTML = '扫描中<span class="loading"></span>';
+            
+            try {
+                const url = strategy ? `/api/scan?strategy=${encodeURIComponent(strategy)}` : '/api/scan';
+                const response = await fetch(url);
+                const result = await response.json();
+                
+                if (result.success) {
+                    displayStocks(result.data, strategy);
+                } else {
+                    alert('扫描失败: ' + result.error);
+                }
+            } catch (error) {
+                alert('请求失败: ' + error.message);
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '开始扫描';
+            }
+        }
+        
+        function displayStocks(stocks, strategy) {
+            const list = document.getElementById('stockList');
+            list.innerHTML = '';
+            
+            // 显示扫描信息
+            if (strategy) {
+                const info = document.createElement('div');
+                info.className = 'scan-info';
+                info.innerHTML = `📊 策略【${strategy}】扫描结果：找到 ${stocks.length} 只符合条件的股票`;
+                list.appendChild(info);
+            }
+            
+            if (stocks.length === 0) {
+                const empty = document.createElement('div');
+                empty.className = 'empty-state';
+                empty.innerHTML = strategy ? `暂无符合【${strategy}】策略的股票` : '暂无符合条件的股票';
+                list.appendChild(empty);
+                return;
+            }
+            
+            const grid = document.createElement('div');
+            grid.style.cssText = 'display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 15px;';
+            
+            stocks.forEach(stock => {
+                const card = document.createElement('div');
+                card.className = 'stock-card';
+                
+                const change = stock['涨跌幅'];
+                const changeClass = change > 0 ? 'up' : 'down';
+                
+                let extraInfo = '';
+                if (stock['策略']) {
+                    extraInfo = `<div style="font-size: 12px; color: #9b59b6; margin-top: 5px;">✓ ${stock['策略']}</div>`;
+                }
+                
+                card.innerHTML = `
+                    <div class="stock-code">${stock['代码']}</div>
+                    <div class="stock-price">¥${stock['最新价'].toFixed(2)}</div>
+                    <div class="stock-change ${changeClass}">
+                        ${change > 0 ? '+' : ''}${change.toFixed(2)}%
+                    </div>
+                    ${extraInfo}
+                `;
+                
+                card.onclick = () => selectStock(stock['代码'], card);
+                grid.appendChild(card);
+            });
+            
+            list.appendChild(grid);
+        }
+        
+        async function selectStock(symbol, cardElement) {
+            // 更新选中状态
+            document.querySelectorAll('.stock-card').forEach(card => {
+                card.classList.remove('active');
+            });
+            cardElement.classList.add('active');
+            
+            currentStock = symbol;
+            
+            // 显示图表容器
+            document.getElementById('chartsContainer').style.display = 'grid';
+            document.getElementById('infoBox').style.display = 'block';
+            
+            // 加载数据
+            await Promise.all([
+                loadIntradayData(symbol),
+                loadKlineData(symbol),
+                loadStockInfo(symbol),
+                loadStockStrategies(symbol)
+            ]);
+        }
+        
+        async function loadIntradayData(symbol) {
+            try {
+                const response = await fetch(`/api/stock/${symbol}/intraday`);
+                const result = await response.json();
+                
+                if (result.success) {
+                    drawIntradayChart(result.data);
+                }
+            } catch (error) {
+                console.error('加载分时数据失败:', error);
+            }
+        }
+        
+        async function loadKlineData(symbol) {
+            try {
+                const response = await fetch(`/api/stock/${symbol}/kline`);
+                const result = await response.json();
+                
+                if (result.success) {
+                    drawKlineChart(result.data);
+                }
+            } catch (error) {
+                console.error('加载K线数据失败:', error);
+            }
+        }
+        
+        async function loadStockInfo(symbol) {
+            try {
+                const response = await fetch(`/api/stock/${symbol}/info`);
+                const result = await response.json();
+                
+                if (result.success) {
+                    displayStockInfo(result.data);
+                }
+            } catch (error) {
+                console.error('加载股票信息失败:', error);
+            }
+        }
+        
+        function drawIntradayChart(data) {
+            const ctx = document.getElementById('intradayChart').getContext('2d');
+            
+            if (intradayChart) {
+                intradayChart.destroy();
+            }
+            
+            const times = data.map(d => d.time);
+            const prices = data.map(d => d.price);
+            
+            intradayChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: times,
+                    datasets: [{
+                        label: '股价',
+                        data: prices,
+                        borderColor: '#667eea',
+                        backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                        borderWidth: 2,
+                        fill: true,
+                        tension: 0.4,
+                        pointRadius: 0,
+                        pointHoverRadius: 6
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: false
+                        }
+                    }
+                }
+            });
+        }
+        
+        function drawKlineChart(data) {
+            const ctx = document.getElementById('klineChart').getContext('2d');
+            
+            if (klineChart) {
+                klineChart.destroy();
+            }
+            
+            const dates = data.map(d => d.date);
+            const closes = data.map(d => d.close);
+            
+            klineChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: dates,
+                    datasets: [{
+                        label: '收盘价',
+                        data: closes,
+                        borderColor: '#764ba2',
+                        backgroundColor: 'rgba(118, 75, 162, 0.1)',
+                        borderWidth: 2,
+                        fill: true,
+                        tension: 0.4,
+                        pointRadius: 0,
+                        pointHoverRadius: 6
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: false
+                        }
+                    }
+                }
+            });
+        }
+        
+        function displayStockInfo(info) {
+            const grid = document.getElementById('infoGrid');
+            grid.innerHTML = '';
+            const stockInfo = info || {};
+            
+            const preferredKeys = [
+                '股票代码',
+                '股票简称',
+                '行业',
+                '行业板块',
+                '概念板块',
+                '所属板块',
+                '最新',
+                '总市值',
+                '流通市值',
+                '总股本',
+                '流通股',
+                '上市时间'
+            ];
+
+            const entries = Object.entries(stockInfo);
+            const items = [];
+            const usedKeys = new Set();
+
+            preferredKeys.forEach((key) => {
+                if (Object.prototype.hasOwnProperty.call(stockInfo, key)) {
+                    items.push([key, stockInfo[key]]);
+                    usedKeys.add(key);
+                }
+            });
+
+            entries.forEach(([key, value]) => {
+                if (!usedKeys.has(key)) {
+                    items.push([key, value]);
+                }
+            });
+
+            const visibleItems = items
+                .filter(([, value]) => value !== null && value !== undefined && String(value).trim() !== '')
+                .slice(0, 12);
+
+            visibleItems.forEach(([key, value]) => {
+                const item = document.createElement('div');
+                item.className = 'info-item';
+                const valueClass = key.includes('板块') ? 'info-value info-value-wrap' : 'info-value';
+                item.innerHTML = `
+                    <div class="info-label">${key}</div>
+                    <div class="${valueClass}">${value}</div>
+                `;
+                grid.appendChild(item);
+            });
+        }
+        
+        // 策略相关函数
+        let strategiesData = null;
+        let stockStrategiesData = null;
+        
+        async function showStrategies() {
+            const section = document.getElementById('strategySection');
+            
+            if (section.style.display === 'none') {
+                section.style.display = 'block';
+                await loadStrategies();
+            } else {
+                section.style.display = 'none';
+            }
+        }
+        
+        async function loadStrategies() {
+            try {
+                const response = await fetch('/api/strategies');
+                const result = await response.json();
+                
+                if (result.success) {
+                    strategiesData = result.data;
+                    document.getElementById('strategyCount').textContent = `${result.total} 个策略`;
+                    displayStrategies(result.data);
+                }
+            } catch (error) {
+                console.error('加载策略失败:', error);
+            }
+        }
+        
+        function displayStrategies(data) {
+            const list = document.getElementById('strategyList');
+            list.innerHTML = '';
+            
+            for (const [category, strategies] of Object.entries(data)) {
+                const categoryDiv = document.createElement('div');
+                categoryDiv.className = 'strategy-category';
+                
+                categoryDiv.innerHTML = `<div class="category-title">${category}</div>`;
+                
+                const grid = document.createElement('div');
+                grid.className = 'strategy-grid';
+                
+                strategies.forEach(s => {
+                    const card = document.createElement('div');
+                    card.className = `strategy-card ${s.type}`;
+                    card.innerHTML = `
+                        <div class="strategy-name">${s.name}</div>
+                        <div class="strategy-desc">${s.desc}</div>
+                        <span class="strategy-type ${s.type}">${s.type}</span>
+                    `;
+                    grid.appendChild(card);
+                });
+                
+                categoryDiv.appendChild(grid);
+                list.appendChild(categoryDiv);
+            }
+        }
+        
+        async function loadStockStrategies(symbol) {
+            try {
+                const response = await fetch(`/api/stock/${symbol}/strategies`);
+                const result = await response.json();
+                
+                if (result.success) {
+                    stockStrategiesData = result.data;
+                    document.getElementById('stockStrategyBox').style.display = 'block';
+                    document.getElementById('triggeredCount').textContent = `${result.triggered_count} 个触发`;
+                    displayStockStrategies(result.data, result.triggered);
+                }
+            } catch (error) {
+                console.error('加载股票策略检测失败:', error);
+            }
+        }
+        
+        function displayStockStrategies(data, triggered) {
+            const list = document.getElementById('stockStrategyList');
+            list.innerHTML = '';
+            
+            // 先显示触发的策略
+            const sortedEntries = Object.entries(data).sort((a, b) => {
+                const aTriggered = a[1]['触发'] ? 0 : 1;
+                const bTriggered = b[1]['触发'] ? 0 : 1;
+                return aTriggered - bTriggered;
+            });
+            
+            sortedEntries.forEach(([name, result]) => {
+                const isTriggered = result['触发'];
+                const div = document.createElement('div');
+                div.className = `strategy-result ${isTriggered ? 'triggered' : 'not-triggered'}`;
+                div.setAttribute('data-triggered', isTriggered ? 'yes' : 'no');
+                
+                div.innerHTML = `
+                    <div>
+                        <span class="strategy-result-name">${name}</span>
+                        <span class="strategy-result-status ${isTriggered ? 'yes' : 'no'}">
+                            ${isTriggered ? '✓ 已触发' : '✗ 未触发'}
+                        </span>
+                    </div>
+                    <div class="strategy-result-detail">
+                        ${result['说明'] || ''}<br>
+                        <small>${result['条件'] || ''}</small>
+                    </div>
+                `;
+                list.appendChild(div);
+            });
+        }
+        
+        function filterStrategies(filter) {
+            // 更新tab状态
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            event.target.classList.add('active');
+            
+            // 过滤显示
+            document.querySelectorAll('.strategy-result').forEach(item => {
+                const isTriggered = item.getAttribute('data-triggered') === 'yes';
+                
+                if (filter === 'all') {
+                    item.style.display = 'block';
+                } else if (filter === 'triggered') {
+                    item.style.display = isTriggered ? 'block' : 'none';
+                } else {
+                    item.style.display = isTriggered ? 'none' : 'block';
+                }
+            });
+        }
+    </script>
+</body>
+</html>

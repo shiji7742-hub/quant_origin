@@ -1,0 +1,18 @@
+[Unit]
+Description=Quant AI Web App
+After=network.target
+
+[Service]
+Type=simple
+User=__APP_USER__
+Group=__APP_GROUP__
+WorkingDirectory=__APP_DIR__
+Environment=PYTHONUNBUFFERED=1
+ExecStart=__VENV_DIR__/bin/gunicorn --workers __WORKERS__ --bind __HOST__:__PORT__ app:app
+Restart=always
+RestartSec=3
+TimeoutStopSec=30
+KillSignal=SIGTERM
+
+[Install]
+WantedBy=multi-user.target

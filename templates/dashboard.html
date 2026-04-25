@@ -1,0 +1,666 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>量化选股数据大屏</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            font-family: 'Microsoft YaHei', sans-serif;
+            background: #1e2128;
+            color: #d0d0d0;
+            min-height: 100vh;
+        }
+        
+        .dashboard {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            grid-template-rows: auto 1fr;
+            gap: 15px;
+            padding: 15px;
+            height: 100vh;
+        }
+        
+        /* 顶部标题 */
+        .header {
+            grid-column: 1 / -1;
+            text-align: center;
+            padding: 12px;
+            background: #252830;
+            border-radius: 8px;
+            position: relative;
+        }
+        
+        .header h1 {
+            font-size: 22px;
+            color: #8bb8d0;
+            letter-spacing: 4px;
+            font-weight: normal;
+        }
+        
+        .header .time {
+            color: #7a8a9a;
+            font-size: 12px;
+            margin-top: 4px;
+        }
+
+        .header-actions {
+            position: absolute;
+            right: 18px;
+            top: 50%;
+            transform: translateY(-50%);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .header-link {
+            color: #d0d0d0;
+            text-decoration: none;
+            font-size: 13px;
+        }
+
+        .header-link:hover { color: #fff; }
+
+        .auth-pill {
+            font-size: 12px;
+            color: #a8bfd0;
+            border: 1px solid #3a4452;
+            background: #1e2128;
+            padding: 8px 12px;
+            border-radius: 999px;
+        }
+        
+        /* 工作区通用样式 */
+        .workspace {
+            background: #252830;
+            border-radius: 8px;
+            padding: 15px;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        
+        .workspace-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding-bottom: 12px;
+            border-bottom: 1px solid #353a45;
+            margin-bottom: 12px;
+        }
+        
+        .workspace-title {
+            font-size: 15px;
+            color: #8bb8d0;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .workspace-title .icon {
+            font-size: 18px;
+        }
+        
+        /* 控制栏 */
+        .controls {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 12px;
+        }
+        
+        .select-box {
+            background: #1e2128;
+            border: 1px solid #404550;
+            color: #d0d0d0;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 13px;
+            cursor: pointer;
+            min-width: 140px;
+        }
+        
+        .select-box:focus {
+            outline: none;
+            border-color: #5a9fcf;
+        }
+        
+        .btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 6px;
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .btn-primary {
+            background: #4a7c9b;
+            color: #fff;
+        }
+        
+        .btn-primary:hover {
+            background: #5a8caa;
+        }
+        
+        .btn-warning {
+            background: #9b7a4a;
+            color: #fff;
+        }
+        
+        .btn-warning:hover {
+            background: #aa8a5a;
+        }
+        
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        /* 结果表格 */
+        .result-area {
+            flex: 1;
+            overflow-y: auto;
+            background: #1e2128;
+            border-radius: 6px;
+            padding: 10px;
+        }
+        
+        .result-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        
+        .result-table th {
+            text-align: left;
+            padding: 10px 8px;
+            font-size: 12px;
+            color: #7a8a9a;
+            border-bottom: 1px solid #353a45;
+            position: sticky;
+            top: 0;
+            background: #1e2128;
+        }
+        
+        .result-table td {
+            padding: 10px 8px;
+            font-size: 13px;
+            border-bottom: 1px solid #2a2f38;
+        }
+        
+        .result-table tr:hover {
+            background: #2a2f38;
+            cursor: pointer;
+        }
+        
+        .result-table .code {
+            color: #8bb8d0;
+            font-weight: 500;
+        }
+        
+        .result-table .up { color: #e25555; }
+        .result-table .down { color: #55b87a; }
+        
+        .result-table .tag {
+            font-size: 11px;
+            padding: 2px 6px;
+            background: #353a45;
+            border-radius: 3px;
+            color: #9aa0aa;
+        }
+        
+        .empty-tip {
+            text-align: center;
+            color: #5a6570;
+            padding: 40px;
+        }
+        
+        /* 板块列表 */
+        .sector-list {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            margin-bottom: 12px;
+            max-height: 180px;
+            overflow-y: auto;
+        }
+        
+        .sector-item {
+            display: flex;
+            align-items: center;
+            padding: 10px 12px;
+            background: #1e2128;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s;
+            border: 1px solid transparent;
+        }
+        
+        .sector-item:hover {
+            background: #2a2f38;
+        }
+        
+        .sector-item.active {
+            border-color: #5a9fcf;
+            background: #2a3545;
+        }
+        
+        .sector-item .name {
+            flex: 1;
+            font-size: 13px;
+        }
+        
+        .sector-item .info {
+            font-size: 11px;
+            color: #7a8a9a;
+            margin-right: 10px;
+        }
+        
+        .sector-item .change {
+            font-size: 12px;
+            font-weight: 500;
+        }
+        
+        .sector-item .change.up { color: #e25555; }
+        .sector-item .change.down { color: #55b87a; }
+        
+        /* 统计信息 */
+        .stats {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 12px;
+        }
+        
+        .stat-item {
+            background: #1e2128;
+            padding: 12px 15px;
+            border-radius: 6px;
+            text-align: center;
+            flex: 1;
+        }
+        
+        .stat-value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #8bb8d0;
+        }
+        
+        .stat-label {
+            font-size: 11px;
+            color: #7a8a9a;
+            margin-top: 4px;
+        }
+        
+        /* 滚动条 */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: #1e2128; }
+        ::-webkit-scrollbar-thumb { background: #404550; border-radius: 3px; }
+        
+        /* 状态标签 */
+        .status {
+            font-size: 11px;
+            padding: 2px 8px;
+            border-radius: 10px;
+            margin-left: 10px;
+        }
+        
+        .status.ready {
+            background: rgba(85, 184, 122, 0.2);
+            color: #55b87a;
+        }
+        
+        .status.loading {
+            background: rgba(155, 122, 74, 0.2);
+            color: #9b7a4a;
+        }
+
+        @media (max-width: 900px) {
+            .header {
+                padding-bottom: 18px;
+            }
+
+            .header-actions {
+                position: static;
+                transform: none;
+                justify-content: center;
+                flex-wrap: wrap;
+                margin-top: 12px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="dashboard">
+        <header class="header">
+            <h1>📊 量化选股工作台</h1>
+            <div class="time" id="currentTime"></div>
+            <div class="header-actions">
+                <span class="auth-pill">已登录：{{ current_user }}</span>
+                <a class="header-link" href="/workspace">工作台首页</a>
+                <a class="header-link" href="/logout">退出登录</a>
+            </div>
+        </header>
+        
+        <!-- 左侧：全市场扫描 -->
+        <div class="workspace">
+            <div class="workspace-header">
+                <div class="workspace-title">
+                    <span class="icon">🔍</span>
+                    全市场策略扫描
+                </div>
+            </div>
+            
+            <div class="controls">
+                <select id="marketStrategy" class="select-box">
+                    <option value="涨停破位洗盘">涨停破位洗盘</option>
+                    <option value="缩量横盘整理">缩量横盘整理</option>
+                    <option value="深度回调支撑">深度回调支撑</option>
+                    <option value="箱体突破">箱体突破</option>
+                    <option value="均线粘合发散">均线粘合发散</option>
+                    <option value="地量见底">地量见底</option>
+                </select>
+                <button class="btn btn-primary" id="marketScanBtn" onclick="scanMarket()">开始扫描</button>
+            </div>
+            
+            <div class="stats">
+                <div class="stat-item">
+                    <div class="stat-value" id="marketScanned">0</div>
+                    <div class="stat-label">扫描数量</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value" id="marketMatched">0</div>
+                    <div class="stat-label">符合条件</div>
+                </div>
+            </div>
+            
+            <div class="result-area">
+                <table class="result-table">
+                    <thead>
+                        <tr>
+                            <th>代码</th>
+                            <th>最新价</th>
+                            <th>涨跌幅</th>
+                            <th>策略</th>
+                        </tr>
+                    </thead>
+                    <tbody id="marketResults">
+                        <tr><td colspan="4" class="empty-tip">选择策略后点击扫描</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        
+        <!-- 右侧：强势板块扫描 -->
+        <div class="workspace">
+            <div class="workspace-header">
+                <div class="workspace-title">
+                    <span class="icon">📈</span>
+                    强势板块个股扫描
+                    <span class="status" id="sectorStatus">未扫描</span>
+                </div>
+                <button class="btn btn-warning" onclick="prescanSectors()">⚡ 预扫描</button>
+            </div>
+            
+            <div class="sector-list" id="sectorList">
+                <div class="empty-tip">点击预扫描加载潜力板块</div>
+            </div>
+            
+            <div class="controls">
+                <select id="sectorStrategy" class="select-box">
+                    <option value="涨停破位洗盘">涨停破位洗盘</option>
+                    <option value="缩量横盘整理">缩量横盘整理</option>
+                    <option value="深度回调支撑">深度回调支撑</option>
+                    <option value="箱体突破">箱体突破</option>
+                    <option value="均线粘合发散">均线粘合发散</option>
+                    <option value="地量见底">地量见底</option>
+                </select>
+                <button class="btn btn-primary" id="sectorScanBtn" onclick="scanSelectedSector()">扫描板块</button>
+            </div>
+            
+            <div class="stats">
+                <div class="stat-item">
+                    <div class="stat-value" id="sectorCount">0</div>
+                    <div class="stat-label">潜力板块</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value" id="sectorMatched">0</div>
+                    <div class="stat-label">符合条件</div>
+                </div>
+            </div>
+            
+            <div class="result-area">
+                <table class="result-table">
+                    <thead>
+                        <tr>
+                            <th>代码</th>
+                            <th>名称</th>
+                            <th>涨跌幅</th>
+                            <th>板块</th>
+                        </tr>
+                    </thead>
+                    <tbody id="sectorResults">
+                        <tr><td colspan="4" class="empty-tip">选择板块后点击扫描</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+<script>
+// 更新时间
+function updateTime() {
+    const now = new Date();
+    document.getElementById('currentTime').textContent = 
+        now.toLocaleDateString('zh-CN') + ' ' + now.toLocaleTimeString('zh-CN');
+}
+setInterval(updateTime, 1000);
+updateTime();
+
+async function getApiData(url, options) {
+    const response = await fetch(url, options);
+    const responseText = await response.text();
+    const trimmedText = responseText.trim();
+    let result = null;
+
+    if (trimmedText) {
+        try {
+            result = JSON.parse(trimmedText);
+        } catch (error) {
+            result = null;
+        }
+    }
+
+    if (response.status === 401 || result?.login_required) {
+        window.location.href = result?.login_url || `/login?next=${encodeURIComponent(window.location.pathname + window.location.search)}`;
+        throw new Error('login-required');
+    }
+
+    if (!result) {
+        if (response.status === 504) {
+            throw new Error('扫描超时，服务器网关未及时返回结果，请稍后重试');
+        }
+        if (trimmedText.startsWith('<')) {
+            throw new Error(`服务器返回了 HTML 错误页 (${response.status || 'unknown'})`);
+        }
+        throw new Error(response.ok ? '服务器返回了无法解析的响应' : `请求失败 (${response.status})`);
+    }
+
+    if (!response.ok || !result.success) {
+        throw new Error(result.error || `请求失败 (${response.status})`);
+    }
+
+    return result;
+}
+
+// ========== 全市场扫描 ==========
+async function scanMarket() {
+    const btn = document.getElementById('marketScanBtn');
+    const strategy = document.getElementById('marketStrategy').value;
+    const tbody = document.getElementById('marketResults');
+    
+    btn.disabled = true;
+    btn.textContent = '扫描中...';
+    
+    try {
+        const params = new URLSearchParams({
+            strategy,
+            async: '1',
+            force: '1'
+        });
+        const result = await getApiData(`/api/scan?${params.toString()}`);
+        const data = Array.isArray(result.data) ? result.data : [];
+        document.getElementById('marketScanned').textContent = result.scanned_count ?? result.count ?? data.length;
+        document.getElementById('marketMatched').textContent = data.length;
+        if (result.processing && data.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="4" class="empty-tip">正在后台扫描，请稍候再试</td></tr>';
+        } else {
+            displayMarketResults(data);
+        }
+    } catch (error) {
+        if (error.message !== 'login-required') {
+            console.error('扫描失败:', error);
+            document.getElementById('marketScanned').textContent = '0';
+            document.getElementById('marketMatched').textContent = '0';
+            tbody.innerHTML = `<tr><td colspan="4" class="empty-tip">${error.message || '扫描失败，请稍后重试'}</td></tr>`;
+        }
+    } finally {
+        btn.disabled = false;
+        btn.textContent = '开始扫描';
+    }
+}
+
+function displayMarketResults(stocks) {
+    const tbody = document.getElementById('marketResults');
+    
+    if (stocks.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="4" class="empty-tip">暂无符合条件的股票</td></tr>';
+        return;
+    }
+    
+    tbody.innerHTML = stocks.map(s => `
+        <tr ondblclick="showDetail('${s['代码']}', '${s['策略'] || ''}', '${(s['说明'] || '').replace(/'/g, "\\'")}')">
+            <td class="code">${s['代码']}</td>
+            <td>¥${s['最新价'].toFixed(2)}</td>
+            <td class="${s['涨跌幅'] > 0 ? 'up' : 'down'}">${s['涨跌幅'] > 0 ? '+' : ''}${s['涨跌幅'].toFixed(2)}%</td>
+            <td><span class="tag">${s['策略'] || '-'}</span></td>
+        </tr>
+    `).join('');
+}
+
+// ========== 强势板块扫描 ==========
+let selectedSector = null;
+let sectorCache = {};
+
+async function prescanSectors() {
+    const status = document.getElementById('sectorStatus');
+    const list = document.getElementById('sectorList');
+    
+    status.textContent = '扫描中...';
+    status.className = 'status loading';
+    list.innerHTML = '<div class="empty-tip">正在扫描潜力板块...</div>';
+    
+    try {
+        await getApiData('/api/prescan', {method: 'POST'});
+        status.textContent = '已就绪';
+        status.className = 'status ready';
+        loadSectors();
+    } catch (error) {
+        if (error.message === 'login-required') {
+            return;
+        }
+        console.error('预扫描失败:', error);
+        status.textContent = '失败';
+        list.innerHTML = '<div class="empty-tip">预扫描失败，请重试</div>';
+    }
+}
+
+async function loadSectors() {
+    try {
+        const result = await getApiData('/api/potential-sectors');
+        if (result.data.length > 0) {
+            document.getElementById('sectorCount').textContent = result.data.length;
+            displaySectors(result.data);
+        }
+    } catch (error) {
+        if (error.message !== 'login-required') {
+            console.error('加载板块失败:', error);
+        }
+    }
+}
+
+function displaySectors(sectors) {
+    const list = document.getElementById('sectorList');
+    
+    list.innerHTML = sectors.map(s => `
+        <div class="sector-item" onclick="selectSector('${s.name}', this)">
+            <span class="name">${s.name}</span>
+            <span class="info">回撤${s.drawdown}%</span>
+            <span class="change ${s.change > 0 ? 'up' : 'down'}">${s.change > 0 ? '+' : ''}${s.change.toFixed(2)}%</span>
+        </div>
+    `).join('');
+}
+
+function selectSector(name, el) {
+    document.querySelectorAll('.sector-item').forEach(e => e.classList.remove('active'));
+    el.classList.add('active');
+    selectedSector = name;
+}
+
+async function scanSelectedSector() {
+    if (!selectedSector) {
+        alert('请先选择一个板块');
+        return;
+    }
+    
+    const btn = document.getElementById('sectorScanBtn');
+    const strategy = document.getElementById('sectorStrategy').value;
+    
+    btn.disabled = true;
+    btn.textContent = '扫描中...';
+    
+    try {
+        const result = await getApiData(`/api/scan-sector?sector=${encodeURIComponent(selectedSector)}&strategy=${encodeURIComponent(strategy)}`);
+        document.getElementById('sectorMatched').textContent = result.data.length;
+        displaySectorResults(result.data);
+    } catch (error) {
+        if (error.message !== 'login-required') {
+            console.error('扫描失败:', error);
+        }
+    } finally {
+        btn.disabled = false;
+        btn.textContent = '扫描板块';
+    }
+}
+
+function displaySectorResults(stocks) {
+    const tbody = document.getElementById('sectorResults');
+    
+    if (stocks.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="4" class="empty-tip">该板块暂无符合条件的股票</td></tr>';
+        return;
+    }
+    
+    tbody.innerHTML = stocks.map(s => `
+        <tr ondblclick="showDetail('${s['代码']}', '${s['策略'] || ''}', '${(s['说明'] || '').replace(/'/g, "\\'")}')">
+            <td class="code">${s['代码']}</td>
+            <td>${s['名称'] || '-'}</td>
+            <td class="${s['涨跌幅'] > 0 ? 'up' : 'down'}">${s['涨跌幅'] > 0 ? '+' : ''}${s['涨跌幅'].toFixed(2)}%</td>
+            <td><span class="tag">${s['板块'] || '-'}</span></td>
+        </tr>
+    `).join('');
+}
+
+// ========== 股票详情 ==========
+function showDetail(code, strategy, reason) {
+    alert(`${code}\n策略: ${strategy}\n理由: ${reason}`);
+    // 后续可以改成弹窗显示K线图
+}
+
+// 初始化
+loadSectors();
+</script>
+</body>
+</html>

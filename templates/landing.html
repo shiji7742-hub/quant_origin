@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>量化选股系统</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Microsoft YaHei', sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            color: #e0e0e0;
+            min-height: 100vh;
+        }
+        
+        .hero {
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            position: relative;
+        }
+        
+        .logo {
+            width: 100px;
+            height: 100px;
+            background: #e74c3c;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 30px;
+            box-shadow: 0 10px 40px rgba(231,76,60,0.3);
+        }
+        
+        .logo svg {
+            width: 50px;
+            height: 50px;
+        }
+        
+        .hero h1 {
+            font-size: 48px;
+            font-weight: 300;
+            margin-bottom: 15px;
+            letter-spacing: 5px;
+        }
+        
+        .hero p {
+            font-size: 18px;
+            color: #888;
+            margin-bottom: 50px;
+        }
+        
+        .start-btn {
+            padding: 18px 60px;
+            font-size: 16px;
+            background: transparent;
+            border: 2px solid #e74c3c;
+            color: #e74c3c;
+            border-radius: 30px;
+            cursor: pointer;
+            transition: all 0.3s;
+            letter-spacing: 3px;
+        }
+        
+        .start-btn:hover {
+            background: #e74c3c;
+            color: #fff;
+        }
+        
+        .scroll-hint {
+            position: absolute;
+            bottom: 40px;
+            font-size: 12px;
+            color: #555;
+            animation: bounce 2s infinite;
+        }
+        
+        @keyframes bounce {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(10px); }
+        }
+        
+        .section {
+            padding: 80px 20px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        .section-title {
+            font-size: 28px;
+            font-weight: 300;
+            text-align: center;
+            margin-bottom: 50px;
+            letter-spacing: 3px;
+        }
+        
+        .section-title span {
+            color: #e74c3c;
+        }
+        
+        /* 策略卡片 */
+        .strategy-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 25px;
+        }
+        
+        .strategy-card {
+            background: rgba(255,255,255,0.03);
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 12px;
+            padding: 30px;
+            transition: all 0.3s;
+        }
+        
+        .strategy-card:hover {
+            background: rgba(255,255,255,0.06);
+            transform: translateY(-5px);
+        }
+        
+        .strategy-card h3 {
+            font-size: 18px;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .strategy-card h3 .tag {
+            font-size: 11px;
+            padding: 3px 8px;
+            background: #e74c3c;
+            border-radius: 10px;
+            font-weight: normal;
+        }
+        
+        .strategy-card .desc {
+            color: #888;
+            font-size: 14px;
+            line-height: 1.8;
+            margin-bottom: 20px;
+        }
+        
+        .strategy-card .logic {
+            background: rgba(0,0,0,0.2);
+            padding: 15px;
+            border-radius: 8px;
+            font-size: 13px;
+            margin-bottom: 15px;
+        }
+        
+        .strategy-card .logic-title {
+            color: #e74c3c;
+            font-size: 12px;
+            margin-bottom: 8px;
+        }
+        
+        .strategy-card .logic-flow {
+            color: #aaa;
+        }
+        
+        .strategy-card .buy-point {
+            font-size: 13px;
+            color: #27ae60;
+        }
+        
+        /* 回测数据 */
+        .backtest-section {
+            background: rgba(0,0,0,0.2);
+            padding: 80px 20px;
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 30px;
+            max-width: 900px;
+            margin: 0 auto 50px;
+        }
+        
+        .stat-box {
+            text-align: center;
+            padding: 30px;
+            background: rgba(255,255,255,0.03);
+            border-radius: 12px;
+        }
+        
+        .stat-box .value {
+            font-size: 36px;
+            font-weight: bold;
+            color: #e74c3c;
+        }
+        
+        .stat-box .label {
+            font-size: 13px;
+            color: #666;
+            margin-top: 8px;
+        }
+        
+        .backtest-table {
+            width: 100%;
+            max-width: 1000px;
+            margin: 0 auto;
+            border-collapse: collapse;
+            font-size: 14px;
+        }
+        
+        .backtest-table th {
+            text-align: left;
+            padding: 15px;
+            background: rgba(255,255,255,0.05);
+            color: #888;
+            font-weight: normal;
+        }
+        
+        .backtest-table td {
+            padding: 15px;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+        }
+        
+        .backtest-table .positive { color: #e74c3c; }
+        .backtest-table .negative { color: #27ae60; }
+        
+        /* 文件下载 */
+        .files-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 15px;
+        }
+        
+        .file-item {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            padding: 20px;
+            background: rgba(255,255,255,0.03);
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .file-item:hover {
+            background: rgba(255,255,255,0.06);
+        }
+        
+        .file-icon {
+            width: 40px;
+            height: 40px;
+            background: #27ae60;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+        }
+        
+        .file-info .name {
+            font-size: 14px;
+            margin-bottom: 3px;
+        }
+        
+        .file-info .size {
+            font-size: 12px;
+            color: #666;
+        }
+        
+        footer {
+            text-align: center;
+            padding: 40px;
+            color: #444;
+            font-size: 13px;
+        }
+    </style>
+</head>
+<body>
+    <!-- Hero Section -->
+    <div class="hero">
+        <div class="logo">
+            <svg viewBox="0 0 24 24">
+                <defs>
+                    <clipPath id="top"><rect x="0" y="0" width="24" height="12"/></clipPath>
+                    <clipPath id="bottom"><rect x="0" y="12" width="24" height="12"/></clipPath>
+                </defs>
+                <text x="12" y="19" text-anchor="middle" font-size="22" font-weight="bold" font-family="Arial" clip-path="url(#top)" fill="#1a1a1a">S</text>
+                <text x="12" y="19" text-anchor="middle" font-size="22" font-weight="bold" font-family="Arial" clip-path="url(#bottom)" fill="#ffffff">S</text>
+            </svg>
+        </div>
+        <h1>量化选股系统</h1>
+        <p>基于技术分析的智能选股工具</p>
+        <button class="start-btn" onclick="location.href='{{ '/workspace' if is_authenticated else '/login' }}'">
+            {{ '进入工作台' if is_authenticated else '登录使用' }}
+        </button>
+        <div class="scroll-hint">↓ 向下滚动了解更多</div>
+    </div>
+</body>
+</html>
+
+    <!-- 策略一览 -->
+    <div class="section">
+        <h2 class="section-title">策略<span>一览</span></h2>
+        <div class="strategy-grid">
+            <!-- 核心策略 -->
+            <div class="strategy-card">
+                <h3>涨停破位洗盘 <span class="tag">核心</span></h3>
+                <p class="desc">捕捉强势股洗盘后的反包机会。涨停板代表主力强势介入，跌破最低价是洗盘动作，大阳反包确认洗盘结束。</p>
+                <div class="logic">
+                    <div class="logic-title">触发条件</div>
+                    <div class="logic-flow">涨停板 → 跌破涨停最低价 → 大阳线反包</div>
+                </div>
+                <div class="buy-point">买点：大阳反包当日</div>
+            </div>
+            
+            <div class="strategy-card">
+                <h3>缩量横盘整理 <span class="tag">洗盘</span></h3>
+                <p class="desc">上涨后缩量横盘，说明浮筹被洗干净。主力拉升后不急于出货，而是横盘消化获利盘。</p>
+                <div class="logic">
+                    <div class="logic-title">触发条件</div>
+                    <div class="logic-flow">前期涨幅>8% → 横盘振幅<15% → 量能萎缩 → MA20上方</div>
+                </div>
+                <div class="buy-point">买点：横盘末期放量突破时</div>
+            </div>
+            
+            <div class="strategy-card">
+                <h3>深度回调支撑 <span class="tag">回调</span></h3>
+                <p class="desc">急涨后深度回调到均线支撑位，洗掉获利盘后企稳反弹。</p>
+                <div class="logic">
+                    <div class="logic-title">触发条件</div>
+                    <div class="logic-flow">回撤>8% → 到达MA20附近 → 出现止跌信号（阳线/下影线）</div>
+                </div>
+                <div class="buy-point">买点：均线支撑位止跌时</div>
+            </div>
+            
+            <div class="strategy-card">
+                <h3>箱体突破 <span class="tag">突破</span></h3>
+                <p class="desc">长期箱体震荡后放量突破，是主力吸筹完成后的启动信号。</p>
+                <div class="logic">
+                    <div class="logic-title">触发条件</div>
+                    <div class="logic-flow">15日箱体(5-30%) → 放量突破上沿 → 收盘站稳</div>
+                </div>
+                <div class="buy-point">买点：突破当日</div>
+            </div>
+            
+            <div class="strategy-card">
+                <h3>均线粘合发散 <span class="tag">趋势</span></h3>
+                <p class="desc">MA5/10/20粘合说明多空平衡，向上发散是趋势启动信号。</p>
+                <div class="logic">
+                    <div class="logic-title">触发条件</div>
+                    <div class="logic-flow">均线粘合<8% → 放量向上 → 收阳>0.5%</div>
+                </div>
+                <div class="buy-point">买点：均线发散当日</div>
+            </div>
+            
+            <div class="strategy-card">
+                <h3>地量见底 <span class="tag">抄底</span></h3>
+                <p class="desc">地量说明抛压枯竭，放量阳线是资金进场信号。</p>
+                <div class="logic">
+                    <div class="logic-title">触发条件</div>
+                    <div class="logic-flow">近期缩量<80% → 股价回撤>5% → 放量阳线</div>
+                </div>
+                <div class="buy-point">买点：地量后首根放量阳线</div>
+            </div>
+            
+            <div class="strategy-card">
+                <h3>潜力板块 <span class="tag">板块</span></h3>
+                <p class="desc">筛选早期爆发后回撤洗盘、即将二次启动的板块。</p>
+                <div class="logic">
+                    <div class="logic-title">触发条件</div>
+                    <div class="logic-flow">板块爆发>5% → 回撤5-12% → 近期企稳</div>
+                </div>
+                <div class="buy-point">买点：板块企稳后介入龙头</div>
+            </div>
+            
+            <div class="strategy-card">
+                <h3>潜力板块+涨停洗盘 <span class="tag">组合</span></h3>
+                <p class="desc">双重筛选：在潜力板块中找涨停破位洗盘的个股，板块共振+个股买点。</p>
+                <div class="logic">
+                    <div class="logic-title">触发条件</div>
+                    <div class="logic-flow">板块潜力信号 + 个股涨停洗盘信号</div>
+                </div>
+                <div class="buy-point">买点：双重信号共振时</div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 回测数据 -->
+    <div class="backtest-section">
+        <div class="section">
+            <h2 class="section-title">回测<span>数据</span></h2>
+            
+            <div class="stats-grid">
+                <div class="stat-box">
+                    <div class="value">108</div>
+                    <div class="label">回测信号数</div>
+                </div>
+                <div class="stat-box">
+                    <div class="value">62%</div>
+                    <div class="label">30日胜率</div>
+                </div>
+                <div class="stat-box">
+                    <div class="value">+8.2%</div>
+                    <div class="label">平均30日收益</div>
+                </div>
+                <div class="stat-box">
+                    <div class="value">+15.6%</div>
+                    <div class="label">平均90日收益</div>
+                </div>
+            </div>
+            
+            <table class="backtest-table">
+                <thead>
+                    <tr>
+                        <th>板块</th>
+                        <th>信号日期</th>
+                        <th>回撤</th>
+                        <th>30日收益</th>
+                        <th>60日收益</th>
+                        <th>90日收益</th>
+                    </tr>
+                </thead>
+                <tbody id="backtestData">
+                </tbody>
+            </table>
+        </div>
+    </div>
+    
+    <!-- 测试文件 -->
+    <div class="section">
+        <h2 class="section-title">测试<span>报告</span></h2>
+        <div class="files-grid" id="filesList">
+        </div>
+    </div>
+    
+    <footer>
+        量化选股系统 v1.0 | 仅供学习研究使用，不构成投资建议
+    </footer>
+
+<script>
+// 回测数据（精选）
+const backtestData = [
+    {sector: "央国企改革", date: "2025-04-21", drawdown: "7.92%", d30: "+46.68%", d60: "+59.79%", d90: "+63.43%"},
+    {sector: "基金重仓", date: "2025-05-29", drawdown: "11.89%", d30: "+15.04%", d60: "+25.72%", d90: "+56.55%"},
+    {sector: "数字孪生", date: "2025-04-21", drawdown: "5.61%", d30: "+15.97%", d60: "+31.35%", d90: "+58.73%"},
+    {sector: "富士康", date: "2025-05-29", drawdown: "10.34%", d30: "+15.44%", d60: "+32.68%", d90: "+50.54%"},
+    {sector: "汽车拆解", date: "2025-04-28", drawdown: "11.79%", d30: "+19.19%", d60: "+43.07%", d90: "+45.32%"},
+    {sector: "反内卷概念", date: "2025-05-29", drawdown: "5.15%", d30: "+27.13%", d60: "+26.50%", d90: "+39.86%"},
+    {sector: "地热能", date: "2025-06-27", drawdown: "6.11%", d30: "+23.08%", d60: "+25.23%", d90: "+38.14%"},
+    {sector: "机器人概念", date: "2025-05-29", drawdown: "6.35%", d30: "+10.14%", d60: "+22.39%", d90: "+26.86%"},
+    {sector: "农业种植", date: "2025-04-28", drawdown: "11.75%", d30: "+12.77%", d60: "+18.20%", d90: "+25.79%"},
+    {sector: "超级品牌", date: "2025-04-21", drawdown: "8.71%", d30: "+7.92%", d60: "+10.04%", d90: "+26.26%"}
+];
+
+// 渲染回测表格
+const tbody = document.getElementById('backtestData');
+tbody.innerHTML = backtestData.map(d => `
+    <tr>
+        <td>${d.sector}</td>
+        <td>${d.date}</td>
+        <td>${d.drawdown}</td>
+        <td class="${d.d30.startsWith('+') ? 'positive' : 'negative'}">${d.d30}</td>
+        <td class="${d.d60.startsWith('+') ? 'positive' : 'negative'}">${d.d60}</td>
+        <td class="${d.d90.startsWith('+') ? 'positive' : 'negative'}">${d.d90}</td>
+    </tr>
+`).join('');
+
+// 测试文件列表
+const files = [
+    {name: "潜力板块信号收益回测.xlsx", size: "回测数据"},
+    {name: "潜力板块策略汇总报告.xlsx", size: "策略汇总"},
+    {name: "板块信号+涨停洗盘回测.xlsx", size: "组合策略"},
+    {name: "新策略回测.xlsx", size: "5种新策略"},
+    {name: "妖股震荡低吸_回测.xlsx", size: "妖股策略"},
+    {name: "牛股洗盘特征分析.xlsx", size: "特征分析"},
+    {name: "策略组合回测.xlsx", size: "组合回测"},
+    {name: "月度报告_2025.docx", size: "月度报告"}
+];
+
+const filesList = document.getElementById('filesList');
+filesList.innerHTML = files.map(f => `
+    <div class="file-item">
+        <div class="file-icon">${f.name.endsWith('.xlsx') ? '📊' : '📄'}</div>
+        <div class="file-info">
+            <div class="name">${f.name}</div>
+            <div class="size">${f.size}</div>
+        </div>
+    </div>
+`).join('');
+</script>
+</body>
+</html>

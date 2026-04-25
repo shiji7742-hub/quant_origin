@@ -1,0 +1,616 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>全市场扫描 - 量化选股</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Microsoft YaHei', sans-serif;
+            background: #f8f9fa;
+            color: #333;
+            min-height: 100vh;
+        }
+        
+        .header {
+            background: #fff;
+            padding: 15px 30px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        
+        .header h1 {
+            font-size: 18px;
+            font-weight: normal;
+            color: #333;
+        }
+        
+        .back-btn {
+            color: #666;
+            text-decoration: none;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        
+        .back-btn:hover { color: #333; }
+
+        .header-actions {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .auth-pill {
+            font-size: 12px;
+            color: #666;
+            background: #f5f5f5;
+            border: 1px solid #ececec;
+            padding: 8px 12px;
+            border-radius: 999px;
+        }
+
+        .logout-link {
+            color: #333;
+            text-decoration: none;
+            font-size: 14px;
+        }
+
+        .logout-link:hover { color: #000; }
+        
+        .main {
+            max-width: 1200px;
+            margin: 30px auto;
+            padding: 0 20px;
+        }
+        
+        .controls {
+            background: #fff;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .select-box {
+            padding: 10px 15px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 14px;
+            min-width: 160px;
+            background: #fff;
+        }
+        
+        .btn {
+            padding: 10px 25px;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .btn-primary {
+            background: #333;
+            color: #fff;
+        }
+        
+        .btn-primary:hover { background: #444; }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        
+        .stats {
+            display: flex;
+            gap: 15px;
+            margin-left: auto;
+        }
+
+        .controls-meta {
+            margin-bottom: 16px;
+            font-size: 13px;
+            color: #666;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .meta-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #27ae60;
+            flex-shrink: 0;
+        }
+        
+        .stat {
+            text-align: center;
+            padding: 0 20px;
+            border-left: 1px solid #eee;
+        }
+        
+        .stat:first-child { border: none; }
+        .stat-value { font-size: 24px; font-weight: bold; color: #333; }
+        .stat-label { font-size: 12px; color: #999; margin-top: 2px; }
+        
+        .result-card {
+            background: #fff;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            overflow: hidden;
+        }
+        
+        .result-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        
+        .result-table th {
+            text-align: left;
+            padding: 15px 20px;
+            font-size: 13px;
+            color: #999;
+            font-weight: normal;
+            border-bottom: 1px solid #f0f0f0;
+            background: #fafafa;
+        }
+        
+        .result-table td {
+            padding: 15px 20px;
+            font-size: 14px;
+            border-bottom: 1px solid #f5f5f5;
+        }
+        
+        .result-table tr:hover { background: #fafafa; cursor: pointer; }
+        .result-table .code { color: #333; font-weight: 500; }
+        .result-table .up { color: #e74c3c; }
+        .result-table .down { color: #27ae60; }
+        .result-table .tag {
+            font-size: 12px;
+            padding: 3px 8px;
+            background: #f0f0f0;
+            border-radius: 4px;
+            color: #666;
+        }
+        
+        .empty-tip {
+            text-align: center;
+            color: #999;
+            padding: 60px;
+        }
+        
+        .strategy-list {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        
+        .strategy-chip {
+            padding: 8px 16px;
+            background: #f5f5f5;
+            border: 1px solid #e0e0e0;
+            border-radius: 20px;
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .strategy-chip:hover { background: #eee; }
+        .strategy-chip.active {
+            background: #333;
+            color: #fff;
+            border-color: #333;
+        }
+
+        @media (max-width: 768px) {
+            .header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 12px;
+            }
+
+            .header-actions {
+                width: 100%;
+                flex-wrap: wrap;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>全市场策略扫描</h1>
+        <div class="header-actions">
+            <span class="auth-pill">已登录：{{ current_user }}</span>
+            <a href="/workspace" class="back-btn">← 返回工作台</a>
+            <a href="/logout" class="logout-link">退出登录</a>
+        </div>
+    </div>
+    
+    <div class="main">
+        <div class="controls">
+            <div class="strategy-list">
+                <div class="strategy-chip" onclick="selectStrategy(this, '涨停破位洗盘')">涨停破位洗盘</div>
+                <div class="strategy-chip" onclick="selectStrategy(this, '缩量横盘整理')">缩量横盘整理</div>
+                <div class="strategy-chip" onclick="selectStrategy(this, '深度回调支撑')">深度回调支撑</div>
+                <div class="strategy-chip" onclick="selectStrategy(this, '箱体突破')">箱体突破</div>
+                <div class="strategy-chip active" onclick="selectStrategy(this, '均线粘合发散')">均线粘合发散</div>
+                <div class="strategy-chip" onclick="selectStrategy(this, '地量见底')">地量见底</div>
+            </div>
+            <button class="btn btn-primary" id="scanBtn" onclick="scan(true)">立即刷新</button>
+            <div class="stats">
+                <div class="stat">
+                    <div class="stat-value" id="scanned">0</div>
+                    <div class="stat-label">扫描数量</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value" id="matched">0</div>
+                    <div class="stat-label">符合条件</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="controls-meta">
+            <span class="meta-dot"></span>
+            <span id="refreshStatus">打开页面后自动加载，每 60 秒更新一次</span>
+        </div>
+        
+        <div class="result-card">
+            <table class="result-table">
+                <thead>
+                    <tr>
+                        <th>代码</th>
+                        <th>最新价</th>
+                        <th>涨跌幅</th>
+                        <th>策略</th>
+                        <th>说明</th>
+                    </tr>
+                </thead>
+                <tbody id="results">
+                    <tr><td colspan="5" class="empty-tip">选择策略后点击扫描</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+<script>
+const DEFAULT_STRATEGY = '均线粘合发散';
+
+let currentStrategy = DEFAULT_STRATEGY;
+let scanResults = [];
+let displayedStrategy = null;
+let isScanning = false;
+let autoRefreshTimer = null;
+let pendingAutoRefresh = false;
+
+const AUTO_REFRESH_INTERVAL_MS = 60 * 1000;
+
+// localStorage 键名
+const STORAGE_KEYS = {
+    strategy: 'market_v2_currentStrategy',
+    results: 'market_v2_scanResults',
+    resultsStrategy: 'market_v2_resultsStrategy',
+    scanned: 'market_v2_scannedCount',
+    matched: 'market_v2_matchedCount',
+    updatedAt: 'market_v2_lastUpdatedAt'
+};
+
+function normalizeCount(value) {
+    return /^\d+$/.test(String(value || '').trim()) ? String(value).trim() : '0';
+}
+
+function filterResultsForStrategy(stocks, strategy) {
+    if (!Array.isArray(stocks)) {
+        return [];
+    }
+
+    return stocks.filter(stock => {
+        const rowStrategy = String(stock?.['策略'] || '').trim();
+        return !rowStrategy || rowStrategy === strategy;
+    });
+}
+
+async function getApiData(url, options) {
+    const response = await fetch(url, options);
+    const responseText = await response.text();
+    const trimmedText = responseText.trim();
+    let result = null;
+
+    if (trimmedText) {
+        try {
+            result = JSON.parse(trimmedText);
+        } catch (error) {
+            result = null;
+        }
+    }
+
+    if (response.status === 401 || result?.login_required) {
+        window.location.href = result?.login_url || `/login?next=${encodeURIComponent(window.location.pathname + window.location.search)}`;
+        throw new Error('login-required');
+    }
+
+    if (!result) {
+        if (response.status === 504) {
+            throw new Error('扫描超时，服务器网关未及时返回结果，请稍后重试');
+        }
+        if (trimmedText.startsWith('<')) {
+            throw new Error(`服务器返回了 HTML 错误页 (${response.status || 'unknown'})`);
+        }
+        throw new Error(response.ok ? '服务器返回了无法解析的响应' : `请求失败 (${response.status})`);
+    }
+
+    if (!response.ok || !result.success) {
+        throw new Error(result.error || `请求失败 (${response.status})`);
+    }
+
+    return result;
+}
+
+// 保存数据到 localStorage
+function saveData() {
+    localStorage.setItem(STORAGE_KEYS.strategy, currentStrategy);
+    localStorage.setItem(STORAGE_KEYS.results, JSON.stringify(scanResults));
+    localStorage.setItem(STORAGE_KEYS.resultsStrategy, displayedStrategy || '');
+    localStorage.setItem(STORAGE_KEYS.scanned, document.getElementById('scanned').textContent);
+    localStorage.setItem(STORAGE_KEYS.matched, document.getElementById('matched').textContent);
+}
+
+function setRefreshStatus(message) {
+    document.getElementById('refreshStatus').textContent = message;
+}
+
+function formatTimestamp(value) {
+    if (!value) {
+        return '';
+    }
+
+    const timestamp = new Date(value);
+    if (Number.isNaN(timestamp.getTime())) {
+        return '';
+    }
+
+    return timestamp.toLocaleTimeString('zh-CN', {
+        hour12: false
+    });
+}
+
+function saveLastUpdated(timestamp) {
+    if (timestamp) {
+        localStorage.setItem(STORAGE_KEYS.updatedAt, timestamp);
+    }
+}
+
+function scheduleAutoRefresh(delay = AUTO_REFRESH_INTERVAL_MS) {
+    if (autoRefreshTimer) {
+        clearTimeout(autoRefreshTimer);
+    }
+
+    autoRefreshTimer = window.setTimeout(() => {
+        scan(false);
+    }, delay);
+}
+
+function clearDisplayedResults(message) {
+    scanResults = [];
+    displayedStrategy = null;
+    document.getElementById('scanned').textContent = '0';
+    document.getElementById('matched').textContent = '0';
+    document.getElementById('results').innerHTML =
+        `<tr><td colspan="5" class="empty-tip">${message}</td></tr>`;
+    saveData();
+}
+
+// 从 localStorage 恢复数据
+function restoreData() {
+    const savedStrategy = localStorage.getItem(STORAGE_KEYS.strategy);
+    const savedResults = localStorage.getItem(STORAGE_KEYS.results);
+    const savedResultsStrategy = localStorage.getItem(STORAGE_KEYS.resultsStrategy);
+    const savedScanned = localStorage.getItem(STORAGE_KEYS.scanned);
+    const savedMatched = localStorage.getItem(STORAGE_KEYS.matched);
+    const savedUpdatedAt = localStorage.getItem(STORAGE_KEYS.updatedAt);
+    
+    // 恢复策略选择
+    if (savedStrategy) {
+        currentStrategy = savedStrategy;
+        document.querySelectorAll('.strategy-chip').forEach(el => {
+            el.classList.remove('active');
+            if (el.textContent === savedStrategy) {
+                el.classList.add('active');
+            }
+        });
+    } else {
+        document.querySelectorAll('.strategy-chip').forEach(el => {
+            el.classList.toggle('active', el.textContent === DEFAULT_STRATEGY);
+        });
+    }
+    
+    // 恢复统计数据
+    if (savedScanned) {
+        document.getElementById('scanned').textContent = normalizeCount(savedScanned);
+    }
+    if (savedMatched) {
+        document.getElementById('matched').textContent = normalizeCount(savedMatched);
+    }
+    
+    // 恢复扫描结果
+    if (savedResults) {
+        try {
+            scanResults = JSON.parse(savedResults);
+            displayedStrategy = savedResultsStrategy || null;
+            if (scanResults.length > 0 && displayedStrategy === currentStrategy) {
+                displayResults(scanResults);
+            } else {
+                scanResults = [];
+                displayedStrategy = null;
+            }
+        } catch (e) {
+            console.error('恢复数据失败:', e);
+        }
+    }
+
+    const formattedTime = formatTimestamp(savedUpdatedAt);
+    if (formattedTime) {
+        setRefreshStatus(`上次更新 ${formattedTime}，每 60 秒自动刷新`);
+    }
+}
+
+function selectStrategy(el, name) {
+    document.querySelectorAll('.strategy-chip').forEach(e => e.classList.remove('active'));
+    el.classList.add('active');
+    currentStrategy = name;
+    clearDisplayedResults(`正在加载 ${name} 的扫描结果...`);
+    setRefreshStatus(`已切换到${name}，正在刷新...`);
+    scan(false);
+}
+
+async function scan(manual = false) {
+    const btn = document.getElementById('scanBtn');
+    const tbody = document.getElementById('results');
+    const requestedStrategy = currentStrategy;
+    let nextRefreshDelay = AUTO_REFRESH_INTERVAL_MS;
+
+    if (isScanning) {
+        pendingAutoRefresh = true;
+        return;
+    }
+
+    isScanning = true;
+    btn.disabled = true;
+    btn.textContent = manual ? '扫描中...' : '自动更新中...';
+    setRefreshStatus(`${manual ? '手动' : '自动'}刷新 ${requestedStrategy} 中...`);
+    
+    try {
+        const params = new URLSearchParams({
+            strategy: requestedStrategy,
+            async: '1'
+        });
+        if (manual) {
+            params.set('force', '1');
+        }
+
+        const result = await getApiData(`/api/scan?${params.toString()}`);
+        if (requestedStrategy !== currentStrategy) {
+            return;
+        }
+
+        const rawResults = Array.isArray(result.data) ? result.data : [];
+        const nextResults = filterResultsForStrategy(rawResults, requestedStrategy);
+        const hasCurrentDisplayedResults = (
+            displayedStrategy === requestedStrategy && scanResults.length > 0
+        );
+
+        if (rawResults.length !== nextResults.length) {
+            console.warn(
+                '已忽略与当前策略不匹配的结果:',
+                requestedStrategy,
+                rawResults.filter(item => String(item?.['策略'] || '').trim() !== requestedStrategy)
+            );
+        }
+
+        if (result.processing) {
+            nextRefreshDelay = 5000;
+        }
+
+        if (nextResults.length > 0 || !result.processing) {
+            scanResults = nextResults;
+            displayedStrategy = requestedStrategy;
+            document.getElementById('scanned').textContent = result.scanned_count ?? result.count ?? nextResults.length;
+            document.getElementById('matched').textContent = nextResults.length;
+            displayResults(nextResults);
+            saveData();
+        }
+
+        if (result.timestamp) {
+            saveLastUpdated(result.timestamp);
+        }
+
+        const formattedTime = formatTimestamp(result.timestamp);
+        if (result.processing) {
+            if (!hasCurrentDisplayedResults && nextResults.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="5" class="empty-tip">${result.message || `正在后台扫描 ${currentStrategy}，5 秒后自动刷新`}</td></tr>`;
+                document.getElementById('scanned').textContent = result.scanned_count ?? '0';
+                document.getElementById('matched').textContent = '0';
+            }
+
+            if (formattedTime && (nextResults.length > 0 || hasCurrentDisplayedResults)) {
+                setRefreshStatus(`${formattedTime} 的结果已展示，${currentStrategy} 正在后台刷新，5 秒后自动检查`);
+            } else {
+                setRefreshStatus(result.message || `${currentStrategy} 正在后台扫描，5 秒后自动检查`);
+            }
+        } else {
+            setRefreshStatus(
+                formattedTime
+                    ? `${formattedTime} 已更新 ${currentStrategy}，每 60 秒自动刷新`
+                    : `已更新 ${currentStrategy}，每 60 秒自动刷新`
+            );
+        }
+    } catch (error) {
+        if (error.message !== 'login-required') {
+            console.error('扫描失败:', error);
+            nextRefreshDelay = 10000;
+            if (displayedStrategy !== requestedStrategy || scanResults.length === 0) {
+                displayedStrategy = null;
+                document.getElementById('scanned').textContent = '0';
+                document.getElementById('matched').textContent = '0';
+                tbody.innerHTML = `<tr><td colspan="5" class="empty-tip">${error.message || '扫描失败，请稍后重试'}</td></tr>`;
+                saveData();
+            }
+            setRefreshStatus(`更新失败：${error.message || '请稍后重试'}，10 秒后重试`);
+        }
+    } finally {
+        isScanning = false;
+        btn.disabled = false;
+        btn.textContent = '立即刷新';
+        scheduleAutoRefresh(nextRefreshDelay);
+
+        if (pendingAutoRefresh) {
+            pendingAutoRefresh = false;
+            scan(false);
+        }
+    }
+}
+
+function displayResults(stocks) {
+    const tbody = document.getElementById('results');
+    
+    if (stocks.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" class="empty-tip">暂无符合条件的股票</td></tr>';
+        return;
+    }
+    
+    tbody.innerHTML = stocks.map(s => `
+        <tr>
+            <td class="code">${s['代码']}</td>
+            <td>¥${s['最新价'].toFixed(2)}</td>
+            <td class="${s['涨跌幅'] > 0 ? 'up' : 'down'}">${s['涨跌幅'] > 0 ? '+' : ''}${s['涨跌幅'].toFixed(2)}%</td>
+            <td><span class="tag">${s['策略'] || '-'}</span></td>
+            <td style="color:#999;font-size:12px;">${s['说明'] || '-'}</td>
+        </tr>
+    `).join('');
+}
+
+// 页面加载时恢复数据并自动开始扫描
+document.addEventListener('DOMContentLoaded', () => {
+    restoreData();
+
+    if (scanResults.length === 0) {
+        document.getElementById('results').innerHTML =
+            '<tr><td colspan="5" class="empty-tip">正在自动加载最新扫描结果...</td></tr>';
+    }
+
+    document.getElementById('scanBtn').textContent = '立即刷新';
+    scan(false);
+});
+
+window.addEventListener('beforeunload', () => {
+    if (autoRefreshTimer) {
+        clearTimeout(autoRefreshTimer);
+    }
+});
+</script>
+</body>
+</html>
