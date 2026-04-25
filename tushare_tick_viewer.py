@@ -6,7 +6,7 @@ Tushare 逐笔/分钟数据查看器
 使用前请先：
 1. 注册 Tushare Pro: https://tushare.pro/register
 2. 获取你的 token（在个人中心）
-3. 将 token 填入下方或设置环境变量 TUSHARE_TOKEN
+3. 优先设置环境变量 TUSHARE_TOKEN；如需本地调试，也只在本地填写下方变量，且不要提交到仓库
 """
 
 import tushare as ts
@@ -14,8 +14,8 @@ import pandas as pd
 from datetime import datetime, timedelta
 import os
 
-# ========== 请在这里填入你的 Tushare Token ==========
-TUSHARE_TOKEN = "b3b504aa0d2576e7c8b868867b2a0d11c227ccdfcfa80e141948a1c4"
+# ========== 请在这里填入你的 Tushare Token（仅限本地，不要提交） ==========
+TUSHARE_TOKEN = ""
 # ===================================================
 
 def init_tushare():
