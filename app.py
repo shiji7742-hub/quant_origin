@@ -3,6 +3,7 @@ from contextlib import contextmanager
 from concurrent.futures import ThreadPoolExecutor
 import json
 import os
+import subprocess
 import tempfile
 import threading
 from datetime import datetime, time as dt_time, timedelta
@@ -454,6 +455,23 @@ def get_current_target():
     return request.path
 
 
+def get_current_git_commit():
+    """返回当前仓库 HEAD commit，失败时降级为 unknown。"""
+    try:
+        result = subprocess.run(
+            ['git', 'rev-parse', 'HEAD'],
+            cwd=os.path.dirname(__file__),
+            capture_output=True,
+            text=True,
+            check=True,
+            encoding='utf-8',
+            errors='ignore',
+        )
+        return result.stdout.strip()
+    except Exception:
+        return 'unknown'
+
+
 def validate_login(username, password):
     """校验用户名和密码。"""
     if not compare_digest(username or '', AUTH_SETTINGS['username']):
@@ -499,7 +517,7 @@ def inject_auth_state():
 @app.before_request
 def enforce_login():
     """未登录时拦截受保护页面和 API。"""
-    public_endpoints = {'static', 'landing', 'login', 'logout'}
+    public_endpoints = {'static', 'landing', 'login', 'logout', 'healthz'}
 
     if request.endpoint is None or request.endpoint in public_endpoints:
         return None
@@ -558,6 +576,17 @@ def logout():
     """退出登录并清理会话。"""
     session.clear()
     return redirect(url_for('login'))
+
+
+@app.route('/healthz')
+def healthz():
+    """对部署脚本暴露的轻量健康检查。"""
+    return jsonify({
+        'status': 'ok',
+        'service': 'quant-ai',
+        'version': get_current_git_commit(),
+        'time': datetime.now().isoformat()
+    })
 
 @app.route('/')
 def landing():
