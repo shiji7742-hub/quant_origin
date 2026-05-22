@@ -1,11 +1,13 @@
 """Flask 后端 API - 提供股票数据和图表"""
+from contextlib import contextmanager
 from concurrent.futures import ThreadPoolExecutor
 import json
 import os
+import tempfile
 import threading
-from datetime import datetime, timedelta
+from datetime import datetime, time as dt_time, timedelta
 from hmac import compare_digest
-from urllib.parse import urljoin, urlparse
+from urllib.parse import quote, urljoin, urlparse
 
 import akshare as ak
 import numpy as np
@@ -26,6 +28,17 @@ from data_fetcher import (
 from new_washout_strategies import check_all_new_strategies
 from screener import screen_all_stocks, screen_stocks, analyze_stock
 from strategies import check_all_strategies
+from trading_calendar import is_trading_day
+
+try:
+    import fcntl
+except ImportError:
+    fcntl = None
+
+try:
+    import msvcrt
+except ImportError:
+    msvcrt = None
 
 load_dotenv()
 
@@ -77,6 +90,38 @@ def get_market_scan_retry_delay_seconds():
         return 15
 
 
+def get_market_scan_refresh_stale_seconds():
+    """后台刷新长时间无回包时，视为僵死任务并允许重新触发。"""
+    try:
+        return max(60, int(os.getenv('MARKET_SCAN_REFRESH_STALE_SECONDS', '1800')))
+    except ValueError:
+        return 1800
+
+
+def get_market_scan_auto_refresh_hour():
+    """收盘后自动刷新的触发小时。"""
+    try:
+        return min(23, max(0, int(os.getenv('MARKET_SCAN_AUTO_REFRESH_HOUR', '15'))))
+    except ValueError:
+        return 15
+
+
+def get_market_scan_auto_refresh_minute():
+    """收盘后自动刷新的触发分钟。"""
+    try:
+        return min(59, max(0, int(os.getenv('MARKET_SCAN_AUTO_REFRESH_MINUTE', '5'))))
+    except ValueError:
+        return 5
+
+
+def get_market_scan_auto_refresh_poll_seconds():
+    """后台调度器的轮询周期。"""
+    try:
+        return max(5, int(os.getenv('MARKET_SCAN_AUTO_REFRESH_POLL_SECONDS', '30')))
+    except ValueError:
+        return 30
+
+
 def is_truthy_arg(value):
     """解析查询参数中的布尔值。"""
     return str(value or '').strip().lower() in {'1', 'true', 'yes', 'on'}
@@ -84,6 +129,118 @@ def is_truthy_arg(value):
 
 MARKET_SCAN_CACHE_LOCK = threading.Lock()
 market_scan_cache = {}
+MARKET_SCAN_AUTO_REFRESH_STRATEGIES = (
+    '涨停破位洗盘',
+    '缩量横盘整理',
+    '深度回调支撑',
+    '箱体突破',
+    '均线粘合发散',
+    '地量见底',
+)
+MARKET_SCAN_SCHEDULER_LOCK = threading.Lock()
+market_scan_scheduler_state = {'started': False}
+
+
+def get_market_scan_cache_dir() -> str:
+    """全市场扫描缓存目录。"""
+    configured = os.getenv('MARKET_SCAN_CACHE_DIR', '').strip()
+    if configured:
+        return configured
+    return os.path.join(os.path.dirname(__file__), 'cache', 'market_scan')
+
+
+def ensure_market_scan_cache_dir() -> str:
+    cache_dir = get_market_scan_cache_dir()
+    os.makedirs(cache_dir, exist_ok=True)
+    return cache_dir
+
+
+def get_market_scan_cache_lockfile_path() -> str:
+    return os.path.join(ensure_market_scan_cache_dir(), '.market_scan.lock')
+
+
+def get_market_scan_cache_file_path(cache_key: str) -> str:
+    safe_name = quote(cache_key, safe='') or '__default__'
+    return os.path.join(ensure_market_scan_cache_dir(), f'{safe_name}.json')
+
+
+def acquire_market_scan_file_lock(lock_file):
+    if fcntl is not None:
+        fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
+        return
+
+    if msvcrt is not None:
+        lock_file.seek(0, os.SEEK_END)
+        if lock_file.tell() == 0:
+            lock_file.write(b'0')
+            lock_file.flush()
+        lock_file.seek(0)
+        msvcrt.locking(lock_file.fileno(), msvcrt.LK_LOCK, 1)
+        return
+
+    raise RuntimeError('当前平台不支持全市场扫描缓存锁')
+
+
+def release_market_scan_file_lock(lock_file):
+    if fcntl is not None:
+        fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
+        return
+
+    if msvcrt is not None:
+        lock_file.seek(0)
+        msvcrt.locking(lock_file.fileno(), msvcrt.LK_UNLCK, 1)
+        return
+
+
+@contextmanager
+def market_scan_cache_file_lock():
+    lock_path = get_market_scan_cache_lockfile_path()
+    with open(lock_path, 'a+b') as lock_file:
+        acquire_market_scan_file_lock(lock_file)
+        try:
+            yield
+        finally:
+            release_market_scan_file_lock(lock_file)
+
+
+def load_market_scan_entry_from_disk(cache_key: str):
+    path = get_market_scan_cache_file_path(cache_key)
+    if not os.path.exists(path):
+        return None
+
+    try:
+        with open(path, 'r', encoding='utf-8') as fh:
+            payload = json.load(fh)
+            return dict(payload) if isinstance(payload, dict) else None
+    except (OSError, json.JSONDecodeError, TypeError, ValueError):
+        return None
+
+
+def store_market_scan_entry(cache_key: str, entry):
+    snapshot = dict(entry or {})
+    path = get_market_scan_cache_file_path(cache_key)
+
+    with tempfile.NamedTemporaryFile(
+        mode='w',
+        encoding='utf-8',
+        dir=ensure_market_scan_cache_dir(),
+        delete=False,
+        suffix='.tmp',
+    ) as tmp_file:
+        json.dump(snapshot, tmp_file, ensure_ascii=False)
+        temp_path = tmp_file.name
+
+    os.replace(temp_path, path)
+
+    with MARKET_SCAN_CACHE_LOCK:
+        market_scan_cache[cache_key] = dict(snapshot)
+
+
+def get_market_scan_auto_refresh_time() -> dt_time:
+    return dt_time(
+        hour=get_market_scan_auto_refresh_hour(),
+        minute=get_market_scan_auto_refresh_minute(),
+    )
 
 
 def get_market_scan_cache_key(strategy: str) -> str:
@@ -113,9 +270,33 @@ def filter_market_scan_rows_for_strategy(rows, strategy: str):
 
 def get_market_scan_entry(cache_key: str):
     """读取缓存快照，避免锁泄漏到业务逻辑。"""
+    disk_entry = load_market_scan_entry_from_disk(cache_key)
+    if disk_entry is not None:
+        with MARKET_SCAN_CACHE_LOCK:
+            market_scan_cache[cache_key] = dict(disk_entry)
+        return disk_entry
+
     with MARKET_SCAN_CACHE_LOCK:
         entry = market_scan_cache.get(cache_key)
         return dict(entry) if entry else None
+
+
+def is_market_scan_entry_refreshing(entry, now: datetime | None = None) -> bool:
+    """识别后台扫描是否仍然活跃，避免僵死任务长期阻塞刷新。"""
+    if not entry or not entry.get('refreshing'):
+        return False
+
+    last_started_at = entry.get('last_started_at')
+    if not last_started_at:
+        return True
+
+    try:
+        started_at = datetime.fromisoformat(last_started_at)
+    except (TypeError, ValueError):
+        return False
+
+    age_seconds = ((now or datetime.now()) - started_at).total_seconds()
+    return age_seconds < get_market_scan_refresh_stale_seconds()
 
 
 def is_market_scan_entry_stale(entry) -> bool:
@@ -134,7 +315,7 @@ def is_market_scan_entry_stale(entry) -> bool:
 
 def can_retry_failed_market_scan(entry) -> bool:
     """失败后的后台重试节流。"""
-    if not entry or not entry.get('error') or entry.get('refreshing'):
+    if not entry or not entry.get('error') or is_market_scan_entry_refreshing(entry):
         return False
 
     last_completed_at = entry.get('last_completed_at')
@@ -148,6 +329,48 @@ def can_retry_failed_market_scan(entry) -> bool:
 
     age_seconds = (datetime.now() - completed_at).total_seconds()
     return age_seconds >= get_market_scan_retry_delay_seconds()
+
+
+def was_market_scan_entry_updated_after_close(entry, now: datetime) -> bool:
+    """判断某策略当天是否已经拿到收盘后的结果。"""
+    timestamp = entry.get('timestamp') if entry else None
+    if not timestamp or entry.get('error'):
+        return False
+
+    try:
+        updated_at = datetime.fromisoformat(timestamp)
+    except (TypeError, ValueError):
+        return False
+
+    return (
+        updated_at.date() == now.date()
+        and updated_at.time() >= get_market_scan_auto_refresh_time()
+    )
+
+
+def should_auto_refresh_market_scan_strategy(strategy: str, now: datetime | None = None) -> bool:
+    """判断某个全市场策略是否需要参与收盘后的自动刷新。"""
+    current_time = now or datetime.now()
+    if not is_trading_day(current_time.date()):
+        return False
+
+    if current_time.time() < get_market_scan_auto_refresh_time():
+        return False
+
+    entry = get_market_scan_entry(get_market_scan_cache_key(strategy))
+    if not entry:
+        return True
+
+    if is_market_scan_entry_refreshing(entry, now=current_time):
+        return False
+
+    if was_market_scan_entry_updated_after_close(entry, current_time):
+        return False
+
+    if entry.get('last_auto_refresh_date') == current_time.date().isoformat():
+        return bool(entry.get('error')) and can_retry_failed_market_scan(entry)
+
+    return True
 
 
 def get_auth_settings():
@@ -534,9 +757,9 @@ def set_market_scan_error(cache_key: str, strategy: str, error_message: str):
     """记录后台扫描失败，但尽量保留上一版结果。"""
     completed_at = datetime.now().isoformat()
 
-    with MARKET_SCAN_CACHE_LOCK:
-        current = market_scan_cache.get(cache_key, {})
-        market_scan_cache[cache_key] = {
+    with market_scan_cache_file_lock():
+        current = get_market_scan_entry(cache_key) or {}
+        store_market_scan_entry(cache_key, {
             'strategy': strategy,
             'data': current.get('data', []),
             'count': current.get('count', len(current.get('data', []))),
@@ -545,17 +768,18 @@ def set_market_scan_error(cache_key: str, strategy: str, error_message: str):
             'refreshing': False,
             'error': error_message,
             'last_started_at': current.get('last_started_at'),
-            'last_completed_at': completed_at
-        }
+            'last_completed_at': completed_at,
+            'last_auto_refresh_date': current.get('last_auto_refresh_date'),
+        })
 
 
 def run_market_scan_refresh(cache_key: str, strategy: str):
     """后台刷新市场扫描缓存。"""
     try:
         payload = perform_market_scan(strategy)
-        with MARKET_SCAN_CACHE_LOCK:
-            current = market_scan_cache.get(cache_key, {})
-            market_scan_cache[cache_key] = {
+        with market_scan_cache_file_lock():
+            current = get_market_scan_entry(cache_key) or {}
+            store_market_scan_entry(cache_key, {
                 'strategy': strategy,
                 'data': payload.get('data', []),
                 'count': payload.get('count', len(payload.get('data', []))),
@@ -564,38 +788,95 @@ def run_market_scan_refresh(cache_key: str, strategy: str):
                 'refreshing': False,
                 'error': None,
                 'last_started_at': current.get('last_started_at'),
-                'last_completed_at': payload.get('timestamp')
-            }
+                'last_completed_at': payload.get('timestamp'),
+                'last_auto_refresh_date': current.get('last_auto_refresh_date'),
+            })
     except Exception as exc:
         set_market_scan_error(cache_key, strategy, str(exc))
 
 
-def start_market_scan_refresh(strategy: str, force_refresh: bool = False) -> bool:
+def start_market_scan_refresh(
+    strategy: str,
+    force_refresh: bool = False,
+    trigger_source: str = 'manual',
+    current_time: datetime | None = None,
+) -> bool:
     """如有必要则启动后台扫描线程。"""
     cache_key = get_market_scan_cache_key(strategy)
+    started_at = current_time or datetime.now()
 
-    with MARKET_SCAN_CACHE_LOCK:
-        current = market_scan_cache.get(cache_key)
-        if current and current.get('refreshing'):
+    with market_scan_cache_file_lock():
+        current = get_market_scan_entry(cache_key)
+        if current and is_market_scan_entry_refreshing(current, now=started_at):
             return False
 
         entry = dict(current or {})
         entry['strategy'] = strategy
         entry['refreshing'] = True
-        entry['last_started_at'] = datetime.now().isoformat()
-        entry['data'] = entry.get('data', [])
-        entry['count'] = entry.get('count', len(entry['data']))
+        entry['last_started_at'] = started_at.isoformat()
+        entry['data'] = filter_market_scan_rows_for_strategy(entry.get('data', []), strategy)
+        entry['count'] = len(entry['data'])
         entry['scanned_count'] = entry.get('scanned_count', 0)
 
         if force_refresh or not entry['data']:
             entry['error'] = None
 
-        market_scan_cache[cache_key] = entry
+        if trigger_source == 'scheduled':
+            entry['last_auto_refresh_date'] = started_at.date().isoformat()
+
+        store_market_scan_entry(cache_key, entry)
 
     threading.Thread(
         target=run_market_scan_refresh,
         args=(cache_key, strategy),
         daemon=True,
+    ).start()
+    return True
+
+
+def trigger_market_scan_auto_refresh(now: datetime | None = None) -> int:
+    """收盘后按策略触发自动刷新；每个策略只在需要时启动一次。"""
+    current_time = now or datetime.now()
+    started = 0
+
+    for strategy in MARKET_SCAN_AUTO_REFRESH_STRATEGIES:
+        if not should_auto_refresh_market_scan_strategy(strategy, now=current_time):
+            continue
+
+        if start_market_scan_refresh(
+            strategy,
+            force_refresh=True,
+            trigger_source='scheduled',
+            current_time=current_time,
+        ):
+            started += 1
+
+    return started
+
+
+def run_market_scan_auto_refresh_scheduler(stop_event: threading.Event | None = None):
+    """后台轮询收盘时点，自动触发一次全市场策略刷新。"""
+    scheduler_stop_event = stop_event or threading.Event()
+
+    while not scheduler_stop_event.wait(get_market_scan_auto_refresh_poll_seconds()):
+        try:
+            trigger_market_scan_auto_refresh()
+        except Exception as exc:
+            print(f"市场扫描自动刷新失败: {exc}")
+
+
+def ensure_market_scan_auto_refresh_scheduler_started() -> bool:
+    """确保后台调度器只在当前进程中启动一次。"""
+    with MARKET_SCAN_SCHEDULER_LOCK:
+        if market_scan_scheduler_state['started']:
+            return False
+
+        market_scan_scheduler_state['started'] = True
+
+    threading.Thread(
+        target=run_market_scan_auto_refresh_scheduler,
+        daemon=True,
+        name='market-scan-auto-refresh',
     ).start()
     return True
 
@@ -622,7 +903,7 @@ def get_market_scan_async_response(strategy: str, force_refresh: bool = False):
 
         if cached_data:
             message = None
-            if entry.get('refreshing'):
+            if is_market_scan_entry_refreshing(entry):
                 message = '正在后台刷新，当前展示上次扫描结果'
             elif entry.get('error'):
                 message = f"最近一次刷新失败，当前展示上次结果：{entry['error']}"
@@ -635,7 +916,7 @@ def get_market_scan_async_response(strategy: str, force_refresh: bool = False):
                 'scanned_count': entry.get('scanned_count', 0),
                 'timestamp': entry.get('timestamp'),
                 'cached': True,
-                'processing': bool(entry.get('refreshing')),
+                'processing': is_market_scan_entry_refreshing(entry),
                 'message': message,
                 'last_started_at': entry.get('last_started_at'),
                 'last_completed_at': entry.get('last_completed_at')
@@ -643,7 +924,7 @@ def get_market_scan_async_response(strategy: str, force_refresh: bool = False):
 
     if entry and entry.get('data'):
         message = None
-        if entry.get('refreshing'):
+        if is_market_scan_entry_refreshing(entry):
             message = '正在后台刷新，请稍候几秒后自动刷新'
         elif entry.get('error'):
             message = f"最近一次刷新结果与当前策略不一致：{entry['error']}"
@@ -656,13 +937,13 @@ def get_market_scan_async_response(strategy: str, force_refresh: bool = False):
             'scanned_count': entry.get('scanned_count', 0),
             'timestamp': entry.get('timestamp'),
             'cached': True,
-            'processing': bool(entry.get('refreshing')),
+            'processing': is_market_scan_entry_refreshing(entry),
             'message': message,
             'last_started_at': entry.get('last_started_at'),
             'last_completed_at': entry.get('last_completed_at')
         })
 
-    if entry and entry.get('error') and not entry.get('refreshing'):
+    if entry and entry.get('error') and not is_market_scan_entry_refreshing(entry):
         return jsonify({
             'success': False,
             'strategy': strategy,
@@ -1202,5 +1483,9 @@ def check_stock_strategies(symbol):
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
+if __name__ != '__main__' or os.environ.get('WERKZEUG_RUN_MAIN') == 'true':
+    ensure_market_scan_auto_refresh_scheduler_started()
+
 if __name__ == '__main__':
+    ensure_market_scan_auto_refresh_scheduler_started()
     app.run(debug=True, port=5000)
