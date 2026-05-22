@@ -72,6 +72,7 @@ http://localhost:5000
 ## 相关文档
 
 - `FRONTEND_GUIDE.md`
+- `deploy/README.md`
 - `README_AI_TRADING.md`
 - `README_SECTOR_STOCK.md`
 - `README_MACD_GOLDEN_CROSS.md`

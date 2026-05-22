@@ -84,6 +84,7 @@ print_summary() {
     log "listen=$HOST:$PORT"
     log "workers=$WORKERS"
     log "test with: curl http://$HOST:$PORT/login"
+    log "day-2 updates use: bash scripts/server_update.sh"
 }
 
 main() {
