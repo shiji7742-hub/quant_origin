@@ -62,3 +62,28 @@ git rev-parse HEAD
 - `.env` 不进入 Git
 - 服务器代码目录不要手工改生产代码
 - 默认更新来源为 `quant-origin/main`
+
+## 腾讯云单 IP 部署
+
+如果服务器只有公网 IP（例如 `134.175.124.122`），建议这样接入：
+
+1. 先把代码同步到服务器仓库：
+
+```bash
+sudo -i
+cd /root/量化/quant_ai
+git fetch quant-origin
+git reset --hard quant-origin/main
+```
+
+2. 让后端继续只监听 `127.0.0.1:5000`，然后用 Nginx 反代公网入口。
+
+示例配置见 `deploy/nginx/quant-ai.conf.example`。
+
+3. 后端健康检查：
+
+```bash
+curl http://127.0.0.1:5000/healthz
+```
+
+4. 如果后面拿到了 IP 证书，再把 `SESSION_COOKIE_SECURE=true` 打开。
